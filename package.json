@@ -1,0 +1,28 @@
+{
+  "name": "DongoChatX",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.9.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "turbo": "^2.10.10",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "crypto": "^1.0.1"
+  }
+}
