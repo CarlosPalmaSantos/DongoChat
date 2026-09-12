@@ -18,8 +18,5 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "crypto": "^1.0.1"
   }
 }

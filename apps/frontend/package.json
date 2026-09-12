@@ -25,7 +25,8 @@
     "framer-motion": "^13.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.2",
+    "dongo-shared": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
