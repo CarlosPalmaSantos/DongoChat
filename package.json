@@ -16,7 +16,7 @@
       "onFail": "download"
     }
   },
-  "type": "module",
+  "type": "commonjs",
   "devDependencies": {
     "@types/node": "^26.2.0",
     "turbo": "^2.10.10",

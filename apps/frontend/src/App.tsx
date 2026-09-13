@@ -20,12 +20,14 @@ import ChatsPage from './pages/chats';
 import ChatPage from './pages/chat';
 import { initializeMockData } from './seedDatabase';
 import type { Chat } from './types/Chat';
+import SettingsPage from './pages/settings';
+import { ConnectionProvider } from './providers/ConnectionProvider';
 
 export function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
   const [sourceColor, setSourceColor] = useState('#8f9fe7');
 
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [selectedChat, setSelectedChat] = useState<Chat | 'settings' | null>(null);
 
   interface DynamicColorPlugin {
     getSystemColor(): Promise<{ color: string }>;
@@ -35,6 +37,7 @@ export function App() {
 
   useEffect(() => {
     const getColor = async () => {
+      // TODO: Comprobación dispositivo
       try {
         console.log('Llamando a getSystemColor...');
         const result = await DynamicColor.getSystemColor();
@@ -55,6 +58,9 @@ export function App() {
     return createTheme({
       palette: {
         mode: prefersDarkMode ? 'dark' : 'light',
+        error: {
+          main: hexFromArgb(scheme.error)
+        },
         primary: {
           main: hexFromArgb(scheme.primary),
           contrastText: hexFromArgb(scheme.onPrimary),
@@ -67,11 +73,18 @@ export function App() {
           container: hexFromArgb(scheme.secondaryContainer),
           onContainer: hexFromArgb(scheme.onSecondaryContainer),
         },
+        tertiary: {
+          main: hexFromArgb(scheme.tertiary),
+          contrastText: hexFromArgb(scheme.onTertiary),
+        },
         background: {
           default: hexFromArgb(scheme.background),
           paper: hexFromArgb(scheme.surface),
           surfaceVariant: hexFromArgb(scheme.surfaceVariant),
         },
+        text: {
+          surfaceVariant: hexFromArgb(scheme.onSurfaceVariant),
+        }
       },
       shape: { borderRadius: 16 },
       typography: { fontFamily: 'Roboto, sans-serif' },
@@ -150,42 +163,58 @@ export function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-
-      {/* Usamos inset: 0 / 100% en lugar de 100vw/100vh para evitar re-calculos por la barra de tareas */}
-      <Box sx={{ position: 'fixed', inset: 0, overflow: 'hidden', bgcolor: 'background.default' }}>
-        <AnimatePresence initial={false}>
-          {!selectedChat ? (
-            /* 1. VISTA: LISTA DE CHATS */
-            <motion.div
-              key="chats-list"
-              initial={{ opacity: 0.8, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0.8, scale: 0.96 }}
-              transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-              style={motionLayerStyle}
-            >
-              <ChatsPage onChatSelected={setSelectedChat} />
-            </motion.div>
-          ) : (
-            /* 2. VISTA: CHAT INDIVIDUAL (Entra estilo modal nativo Android/iOS) */
-            <motion.div
-              key="chat-detail"
-              initial={{ y: '100%' }}
-              animate={{ y: '0%' }}
-              exit={{ y: '100%' }}
-              /* Transición suave tipo Android/iOS nativo optimizada por hardware */
-              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-              style={{
-                ...motionLayerStyle,
-                zIndex: 10,
-              }}
-            >
-              <ChatPage chat={selectedChat} clearSelectedChat={() => setSelectedChat(null)} me="672cbaf7-6b4a-48b0-bb88-77ceaa6be877" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Box>
-    </ThemeProvider>
+      <ConnectionProvider>
+        {/* Usamos inset: 0 / 100% en lugar de 100vw/100vh para evitar re-calculos por la barra de tareas */}
+        <Box sx={{ position: 'fixed', inset: 0, overflow: 'hidden', bgcolor: 'background.default' }}>
+          <AnimatePresence initial={false}>
+            {!selectedChat &&
+              <motion.div
+                key="chats-list"
+                initial={{ opacity: 0.8, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0.8, scale: 0.96 }}
+                transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+                style={motionLayerStyle}
+              >
+                <ChatsPage onChatSelected={setSelectedChat} />
+              </motion.div>
+            }
+            {(!!selectedChat && selectedChat !== 'settings') &&
+              < motion.div
+                key="chat-detail"
+                initial={{ y: '100%' }}
+                animate={{ y: '0%' }}
+                exit={{ y: '100%' }}
+                /* Transición suave tipo Android/iOS nativo optimizada por hardware */
+                transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                style={{
+                  ...motionLayerStyle,
+                  zIndex: 10,
+                }}
+              >
+                <ChatPage chat={selectedChat} clearSelectedChat={() => setSelectedChat(null)} me="672cbaf7-6b4a-48b0-bb88-77ceaa6be877" />
+              </motion.div>
+            }
+            {(selectedChat === 'settings') &&
+              < motion.div
+                key="chat-detail"
+                initial={{ y: '100%' }}
+                animate={{ y: '0%' }}
+                exit={{ y: '100%' }}
+                /* Transición suave tipo Android/iOS nativo optimizada por hardware */
+                transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                style={{
+                  ...motionLayerStyle,
+                  zIndex: 10,
+                }}
+              >
+                <SettingsPage clearSelectedChat={() => setSelectedChat(null)} />
+              </motion.div>
+            }
+          </AnimatePresence>
+        </Box>
+      </ConnectionProvider>
+    </ThemeProvider >
   );
 }
 

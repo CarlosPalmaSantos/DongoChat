@@ -1,5 +1,5 @@
 import { AppBar, Avatar, Badge, Box, Card, CardActionArea, Container, Fab, Stack, Toolbar, Typography } from "@mui/material";
-import AddIcon from '@mui/icons-material/Add';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { getAllChats, type Chat } from "../types/Chat";
 import { useEffect, useState } from "react";
 
@@ -63,7 +63,7 @@ function Chats({ chats, onChatSelected }: ChatProps) {
 }
 
 interface ChatPageProps {
-  onChatSelected: (chat: Chat) => void;
+  onChatSelected: (chat: Chat | 'settings' | null) => void;
 }
 
 export default function ChatsPage({ onChatSelected }: ChatPageProps) {
@@ -99,9 +99,9 @@ export default function ChatsPage({ onChatSelected }: ChatPageProps) {
     <Fab
       color="primary"
       sx={{ position: 'fixed', bottom: 24, right: 24 }}
-      onClick={() => { }}
+      onClick={() => { onChatSelected('settings') }}
     >
-      <AddIcon />
+      <SettingsIcon />
     </Fab>
 
   </>

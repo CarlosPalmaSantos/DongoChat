@@ -5,6 +5,11 @@ import { PaletteColor, PaletteColorOptions } from '@mui/material/styles';
 declare module '@mui/material/styles' {
   interface TypeBackground {
     surfaceVariant?: string;
+    onSurfaceVariant?: string; // ← Texto/Iconos para surfaceVariant
+  }
+
+  interface TypeText {
+    surfaceVariant?: string; // ← Permite usar color="text.surfaceVariant" en Typography
   }
 }
 
