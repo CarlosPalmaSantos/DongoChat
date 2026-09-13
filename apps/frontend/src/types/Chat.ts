@@ -3,6 +3,7 @@ import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 export interface Chat {
   name: string;
   last: string;
+  lastTimestamp?: number;
   pending?: number;
   uuid: string;
   bunchMaxSize: number;
@@ -12,6 +13,7 @@ export interface Chat {
 export interface Message {
   id: string;
   sender: string;
+  receiver: string;
   content: string;
   timestamp: number;
 }

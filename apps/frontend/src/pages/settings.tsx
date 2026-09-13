@@ -8,6 +8,7 @@ import { useState } from "react";
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
   const { conn, editConn, ping } = useConnection();
   const [openPingSnackbar, setOpenPingSnackbar] = useState(false);
+  const [error, setError] = useState<string | undefined>()
   const [pingResult, setPingResult] = useState(-1);
 
   return <Paper
@@ -37,7 +38,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" sx={{ fontWeight: 'bold', flexGrow: 1 }}>
-          Settings
+          Settings (v1)
         </Typography>
       </Toolbar>
 
@@ -63,6 +64,18 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
 
       <TextField
         fullWidth
+        label="Name"
+        variant="outlined"
+        value={conn?.name}
+        onChange={e => { editConn({ name: e.target.value }) }}
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            bgcolor: 'background.paper',
+            borderRadius: 2,
+          }
+        }} />
+      <TextField
+        fullWidth
         label="IP Address"
         variant="outlined"
         type={'url'}
@@ -80,12 +93,19 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         size="large"
         startIcon={<HelpIcon />}
         onClick={() => {
-          ping().then(r => { setPingResult(r); if (r >= 0) setOpenPingSnackbar(true) })
+          ping().then(r => { setPingResult(r); if (r >= 0) setOpenPingSnackbar(true) }).catch(setError)
         }}
         sx={{ borderRadius: 1 }}
       >
         Check Server
       </Button>
+      <Snackbar
+        open={!!error}
+        autoHideDuration={4000}
+        onClose={() => setError(undefined)}
+        message={error}
+      />
+
       <Snackbar
         open={openPingSnackbar}
         autoHideDuration={4000}

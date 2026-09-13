@@ -68,6 +68,7 @@ export const initializeMockData = async (): Promise<void> => {
       for (let i = 0; i < MOCK_MESSAGES.length; i++) {
         const message: Message = {
           id: `msg-${chatSeed.uuid}-${i + 1}`,
+          receiver: chatSeed.name,
           sender: i % 2 === 0 ? 'other' : 'me',
           content: `${MOCK_MESSAGES[i]} (ID: ${i + 1})`,
           timestamp: Date.now() - (MOCK_MESSAGES.length - i) * 60000,

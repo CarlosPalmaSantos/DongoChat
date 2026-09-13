@@ -1,7 +1,9 @@
-import { AppBar, Avatar, Badge, Box, Card, CardActionArea, Container, Fab, Stack, Toolbar, Typography } from "@mui/material";
+import { AppBar, Avatar, Badge, Box, Button, Card, CardActionArea, Container, Dialog, Fab, Stack, TextField, Toolbar, Typography } from "@mui/material";
 import SettingsIcon from '@mui/icons-material/Settings';
-import { getAllChats, type Chat } from "../types/Chat";
-import { useEffect, useState } from "react";
+import AddIcon from '@mui/icons-material/Add';
+import { getAllChats, saveMessage, type Chat } from "../types/Chat";
+import { useEffect, useRef, useState } from "react";
+import { useConnection } from "../hooks/useConnection";
 
 interface ChatProps {
   chats: Chat[];
@@ -9,9 +11,11 @@ interface ChatProps {
 }
 
 function Chats({ chats, onChatSelected }: ChatProps) {
+
+
   return <Container maxWidth="sm" sx={{ p: 1.75 }}>
     <Stack spacing={1.75}>
-      {chats.map((c) => (
+      {Object.values(chats).sort((a, b) => (b.lastTimestamp ?? 0) - (a.lastTimestamp ?? 0)).map((c) => (
         <Card
           key={c.name}
           variant="outlined"
@@ -67,43 +71,145 @@ interface ChatPageProps {
 }
 
 export default function ChatsPage({ onChatSelected }: ChatPageProps) {
-  const [chats, setChats] = useState<Chat[]>([]);
+  const [chats, setChats] = useState<Record<string, Chat>>({});
+  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+  const [newUser, setNewUser] = useState<string>();
+  const { socket, conn } = useConnection();
+
+  // Mantener la referencia siempre actualizada con el último estado de chats
+  const chatsRef = useRef(chats);
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
 
   useEffect(() => {
-    getAllChats().then(setChats);
-  }, [])
+    getAllChats().then(c => setChats(Object.fromEntries(c.map(c1 => ([c1.uuid, c1])))));
+  }, []);
 
-  return <>
-    <AppBar
-      position="static"
-      elevation={0}
-      sx={{
-        bgcolor: 'background.paper',
-        color: 'text.primary',
-        pt: 'calc(env(safe-area-inset-top) + 8px)',
-        borderBottom: 1,
-        borderColor: 'divider',
-        flexShrink: 0,
-      }}
-    >
-      <Toolbar>
-        <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 'bold' }}>
-          DongoChat
-        </Typography>
-      </Toolbar>
-    </AppBar>
+  useEffect(() => {
+    if (!socket) return;
 
-    {/* Lista con scroll */}
-    <Chats chats={chats} onChatSelected={onChatSelected} />
-    {/* Botón flotante para crear chat */}
-    <Fab
-      color="primary"
-      sx={{ position: 'fixed', bottom: 24, right: 24 }}
-      onClick={() => { onChatSelected('settings') }}
-    >
-      <SettingsIcon />
-    </Fab>
+    const currentSocket = socket;
 
-  </>
+    const handle = async (d: any) => {
+      console.debug('incoming msg', d);
 
+      const prevChat = chatsRef.current[d.sender];
+
+      const currentChat: Chat = prevChat ?? {
+        uuid: d.sender,
+        name: d.sender,
+        last: '',
+        lastTimestamp: Date.now(),
+        pending: 0,
+        messages: []
+      };
+
+      const chatToUpdate: Chat = {
+        ...currentChat,
+        last: d.content,
+        lastTimestamp: Date.now(),
+        pending: (currentChat.pending ?? 0) + 1,
+        uuid: d.sender,
+        name: currentChat.name || d.sender,
+      };
+
+      // Esperamos la resolución asíncrona de saveMessage
+      const updatedChat = await saveMessage(chatToUpdate, {
+        id: d.id,
+        timestamp: d.timestamp,
+        sender: d.sender,
+        receiver: conn!.name!,
+        content: d.content,
+      });
+
+      // Actualizamos el estado con el objeto resolved de Chat
+      setChats(prev => ({
+        ...prev,
+        [d.sender]: updatedChat
+      }));
+    };
+
+    currentSocket.on('inbox-message', handle);
+
+    return () => {
+      currentSocket.off('inbox-message', handle);
+    };
+  }, [socket]);
+
+  return (
+    <>
+      <AppBar
+        position="static"
+        elevation={0}
+        sx={{
+          bgcolor: 'background.paper',
+          color: 'text.primary',
+          pt: 'calc(env(safe-area-inset-top) + 8px)',
+          borderBottom: 1,
+          borderColor: 'divider',
+          flexShrink: 0,
+        }}
+      >
+        <Toolbar>
+          <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 'bold' }}>
+            DongoChat
+          </Typography>
+        </Toolbar>
+      </AppBar>
+
+      {/* Lista con scroll */}
+      <Chats chats={Object.values(chats)} onChatSelected={onChatSelected} />
+
+      {/* Botón flotante para crear chat */}
+      <Box
+        sx={{ position: 'fixed', bottom: 24, right: 24, gap: 1, display: 'flex', flexDirection: 'column' }}
+      >
+        <Dialog open={dialogOpen}>
+          <Card sx={{ display: 'flex', flexDirection: 'column', p: 4, gap: 3, alignItems: 'center' }}>
+            <TextField
+              value={newUser}
+              label="Usuario"
+              variant="outlined"
+              onChange={v => setNewUser(v.target.value)}
+            />
+            <Button sx={{ bgcolor: theme => theme.palette.primary.main, color: theme => theme.palette.primary.contrastText, width: 'fit-content' }}
+              onClick={() => {
+                if (!newUser || newUser in chatsRef.current) return;
+                setChats(prev => {
+                  return {
+                    ...prev,
+                    [newUser]: {
+                      name: newUser,
+                      uuid: newUser,
+                      last: '',
+                      lastTimestamp: Date.now(),
+                      bunchMaxSize: 20,
+                      lastBunch: 0,
+                    }
+                  }
+                })
+
+                setDialogOpen(false);
+              }}
+            >
+              ADD
+            </Button>
+          </Card>
+        </Dialog>
+        <Fab
+          color="primary"
+          onClick={() => { setDialogOpen(true); }}
+        >
+          <AddIcon />
+        </Fab>
+        <Fab
+          color="primary"
+          onClick={() => { onChatSelected('settings'); }}
+        >
+          <SettingsIcon />
+        </Fab>
+      </Box >
+    </>
+  );
 }

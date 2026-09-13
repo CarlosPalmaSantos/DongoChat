@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import React from "react";
 import { loadBunch, saveChatMetadata, saveMessage, type Chat, type Message } from "../types/Chat.ts";
 import { v4 } from "uuid";
+import { useConnection } from "../hooks/useConnection.tsx";
 
 const MessageItem = React.memo(({ message, style }: { message: string, style: 'me' | 'other' }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -25,11 +26,11 @@ const MessageItem = React.memo(({ message, style }: { message: string, style: 'm
   </Box>
 ));
 
-export default function ChatPage({ chat, clearSelectedChat, me }: { chat: Chat, clearSelectedChat: () => void, me: string }) {
-  const [message, setMessage] = useState<string>("");
-  const [chatHistory, setChatHistory] = useState<Message[]>([]);
+export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clearSelectedChat: () => void, me: string }) {
+  const [message, setMessage] = useState<string>(""); const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
+  const { socket, conn } = useConnection();
 
   const currentBunchRef = useRef<number>(chat.lastBunch);
 
@@ -56,6 +57,25 @@ export default function ChatPage({ chat, clearSelectedChat, me }: { chat: Chat, 
         setLoading(false);
         saveChatMetadata({ ...chat, pending: 0 });
       }
+
+      function handleMessage(msg: Message) {
+        if (msg.sender !== chat.name) return;
+
+        setChatHistory(prev => {
+          const exists = prev.some(item => item.id === msg.id);
+
+          if (exists) {
+            return prev; // Devolvemos el estado sin cambios
+          }
+          return [...prev, msg];
+        });
+
+        saveMessage(chat, msg)
+      }
+
+      socket?.on('inbox-message', handleMessage)
+
+      return () => { socket?.off('inbox-message', handleMessage) }
     };
 
     initChat();
@@ -65,7 +85,6 @@ export default function ChatPage({ chat, clearSelectedChat, me }: { chat: Chat, 
     };
   }, [chat.uuid, chat.lastBunch]);
 
-  // 2. Carga paginada de bunches antiguos desde archivos de Capacitor
   const loadMoreMessages = useCallback(async () => {
     if (loading || !hasMore || isSendingRef.current || currentBunchRef.current <= 0) return;
 
@@ -117,7 +136,8 @@ export default function ChatPage({ chat, clearSelectedChat, me }: { chat: Chat, 
     const msg: Message = {
       content: message,
       timestamp: Date.now(),
-      sender: me,
+      sender: conn!.name!,
+      receiver: chat.name,
       id: v4()
     };
 
@@ -135,11 +155,10 @@ export default function ChatPage({ chat, clearSelectedChat, me }: { chat: Chat, 
           behavior: 'smooth',
         });
       }
-
-      setTimeout(() => {
-        isSendingRef.current = false;
-      }, 350);
     });
+
+    await socket?.emitWithAck('send-message', msg);
+
   };
 
   return (
@@ -190,11 +209,11 @@ export default function ChatPage({ chat, clearSelectedChat, me }: { chat: Chat, 
         }}
       >
         {/* Renderizamos de forma segura asegurando que chatHistory siempre es array */}
-        {(chatHistory || []).slice().reverse().map((v) => (
+        {(chatHistory || []).slice().sort((a, b) => b.timestamp - a.timestamp).map((v) => (
           <MessageItem
             key={v.id}
             message={v.content}
-            style={v.sender === me ? 'me' : 'other'}
+            style={v.sender === conn?.name ? 'me' : 'other'}
           />
         ))}
 
