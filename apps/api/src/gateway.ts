@@ -34,7 +34,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ): string {
-    console.debug(`> PING FROM ${client.handshake.auth.name}`);
+    Logger.debug(`> PING FROM ${client.handshake.auth.name}`);
     return 'pong';
   }
 }
