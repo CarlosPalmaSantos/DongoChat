@@ -25,6 +25,7 @@ const getBunchFilePath = (chatUuid: string, bunchOrder: number) =>
 
 export const saveMessage = async (chat: Chat, message: Message): Promise<Chat> => {
   try {
+    console.log('saving chat', chat)
     let currentBunchOrder = chat.lastBunch || 0;
     let bunch = await loadBunch(chat.uuid, currentBunchOrder);
 

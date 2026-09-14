@@ -3,6 +3,7 @@ import { loadConnectionSettings, saveConnectionSettings, type ConnectionSettings
 import { io, Socket } from "socket.io-client";
 import { ConnectionContext } from "../contexts/ConnectionContext";
 import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/Chat";
+import type { Message } from "dongo-shared";
 
 export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [conn, setConn] = useState<ConnectionSettings>();
@@ -19,23 +20,26 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     getAllChats().then(c => setChats(Object.fromEntries(c.map(c1 => ([c1.uuid, c1])))));
   }, []);
 
-  useEffect(() => {
-    if (!socket) return;
+  const saveQueues = new Map<string, Promise<void>>();
 
-    const currentSocket = socket;
+  async function handleIncomingMessage(d: any) {
+    console.debug('incoming msg', d);
 
-    const handle = async (d: any) => {
-      console.debug('incoming msg', d);
+    const chatUuid = d.sender;
 
-      const prevChat = chatsRef.current[d.sender];
+    const previousQueue = saveQueues.get(chatUuid) ?? Promise.resolve();
+
+    const currentQueue = previousQueue.then(async () => {
+      const prevChat = chatsRef.current[chatUuid];
 
       const currentChat: Chat = prevChat ?? {
-        uuid: d.sender,
-        name: d.sender,
+        uuid: chatUuid,
+        name: chatUuid,
         last: '',
         lastTimestamp: Date.now(),
         pending: 0,
-        messages: []
+        bunchMaxSize: 100,
+        lastBunch: 0,
       };
 
       const chatToUpdate: Chat = {
@@ -43,11 +47,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         last: d.content,
         lastTimestamp: Date.now(),
         pending: (currentChat.pending ?? 0) + 1,
-        uuid: d.sender,
-        name: currentChat.name || d.sender,
       };
 
-      // Esperamos la resolución asíncrona de saveMessage
       const updatedChat = await saveMessage(chatToUpdate, {
         id: d.id,
         timestamp: d.timestamp,
@@ -56,17 +57,40 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         content: d.content,
       });
 
-      // Actualizamos el estado con el objeto resolved de Chat
+      // Importante: actualizar el ref inmediatamente
+      chatsRef.current = {
+        ...chatsRef.current,
+        [chatUuid]: updatedChat,
+      };
+
       setChats(prev => ({
         ...prev,
-        [d.sender]: updatedChat
+        [chatUuid]: updatedChat,
       }));
-    };
+    });
 
-    currentSocket.on('inbox-message', handle);
+    // Guardamos la promesa actual como cola
+    saveQueues.set(chatUuid, currentQueue);
+
+    try {
+      await currentQueue;
+    } finally {
+      // Solo eliminamos la cola si sigue siendo la última
+      if (saveQueues.get(chatUuid) === currentQueue) {
+        saveQueues.delete(chatUuid);
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const currentSocket = socket;
+
+    currentSocket.on('inbox-message', handleIncomingMessage);
 
     return () => {
-      currentSocket.off('inbox-message', handle);
+      currentSocket.off('inbox-message', handleIncomingMessage);
     };
   }, [socket]);
 
@@ -83,6 +107,12 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
           name: conn.name,
           pass: conn.token,
         },
+      });
+
+      activeSocket.once('connected-inbox', (d: Record<string, Message>) => {
+        console.log('connected inbox');
+        console.log(d)
+        Object.values(d).forEach(handleIncomingMessage);
       });
 
       setSocket(activeSocket); // Actualizamos el estado para los demás componentes

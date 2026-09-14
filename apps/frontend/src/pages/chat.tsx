@@ -27,7 +27,8 @@ const MessageItem = React.memo(({ message, style }: { message: string, style: 'm
 ));
 
 export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clearSelectedChat: () => void, me: string }) {
-  const [message, setMessage] = useState<string>(""); const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  const [message, setMessage] = useState<string>(""); 
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
   const { socket, conn, editChat } = useConnection();

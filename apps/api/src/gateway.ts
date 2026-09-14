@@ -14,7 +14,8 @@ import { type Message } from 'dongo-shared';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
-  users: Record<string, Socket> = {};
+  conectedUsers: Record<string, Socket> = {};
+  storedUsers: Record<string, Record<string, Message>> = {};
 
   @WebSocketServer()
   server!: Server;
@@ -26,7 +27,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     };
 
     Logger.debug(`> Client '${auth.name}' connected`);
-    this.users[auth.name] = client;
+    this.conectedUsers[auth.name] = client;
     await client.join(`inbox-${auth.name}`);
 
     setTimeout(() => {
@@ -39,6 +40,14 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
         content: 'You are login',
       });
     }, 500);
+
+    if (auth.name in this.storedUsers) {
+      Logger.debug(
+        `SENDING INBOX [${JSON.stringify(this.storedUsers[auth.name])}]`,
+      );
+      client.emit('connected-inbox', this.storedUsers[auth.name]);
+      delete this.storedUsers[auth.name];
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -47,7 +56,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
       pass: string;
     };
 
-    delete this.users[auth.name];
+    delete this.conectedUsers[auth.name];
 
     Logger.debug(`> Client '${auth.name}' disconnected`);
   }
@@ -64,15 +73,23 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('send-message')
   handleMsg(@MessageBody() data: Message, @ConnectedSocket() client: Socket) {
     Logger.debug(`> SEND ${JSON.stringify(data)}`);
+    const sender = client.handshake.auth.name;
 
     // TODO: Revisión de Timestamp
     const msg: Message = {
       ...data,
       id: v4(),
-      sender: client.handshake.auth.name,
+      sender,
     };
 
-    this.server.to(`inbox-${data.receiver}`).emit('inbox-message', msg);
+    if (msg.receiver in this.conectedUsers) {
+      this.server.to(`inbox-${data.receiver}`).emit('inbox-message', msg);
+      Logger.debug(`Resending...`);
+    } else {
+      if (!this.storedUsers[msg.receiver]) this.storedUsers[msg.receiver] = {};
+      this.storedUsers[msg.receiver][msg.id] = msg;
+      Logger.debug(`Storing...`);
+    }
 
     return msg;
   }
