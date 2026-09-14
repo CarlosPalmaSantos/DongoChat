@@ -1,4 +1,5 @@
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { type Message } from "dongo-shared"
 
 export interface Chat {
   name: string;
@@ -8,14 +9,6 @@ export interface Chat {
   uuid: string;
   bunchMaxSize: number;
   lastBunch: number;
-}
-
-export interface Message {
-  id: string;
-  sender: string;
-  receiver: string;
-  content: string;
-  timestamp: number;
 }
 
 interface MessageBunch {

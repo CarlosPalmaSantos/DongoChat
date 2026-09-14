@@ -3,9 +3,9 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SendIcon from '@mui/icons-material/Send';
 import { useState, useEffect, useRef, useCallback } from "react";
 import React from "react";
-import { loadBunch, saveMessage, type Chat, type Message } from "../types/Chat.ts";
-import { v4 } from "uuid";
+import { loadBunch, saveMessage, type Chat } from "../types/Chat.ts";
 import { useConnection } from "../hooks/useConnection.tsx";
+import type { Message } from "dongo-shared";
 
 const MessageItem = React.memo(({ message, style }: { message: string, style: 'me' | 'other' }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -134,13 +134,16 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
     if (message.trim() === '') return;
 
     isSendingRef.current = true;
-    const msg: Message = {
-      content: message,
-      timestamp: Date.now(),
+    const prevmsg: Partial<Message> = {
       sender: conn!.name!,
       receiver: chat.name,
-      id: v4()
+      timestamp: Date.now(),
+      content: message,
     };
+
+
+    // TODO: Utilizar el mensaje devuelto por el servidor
+    const msg = await socket?.emitWithAck('send-message', prevmsg);
 
     // Actualizar UI en memoria
     setChatHistory((prev) => [...prev, msg]);
@@ -158,7 +161,6 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
       }
     });
 
-    await socket?.emitWithAck('send-message', msg);
 
   };
 

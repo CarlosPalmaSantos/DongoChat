@@ -8,9 +8,9 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { timestamp } from 'rxjs';
 import { Socket, Server } from 'socket.io';
 import { v4 } from 'uuid';
+import { type Message } from 'dongo-shared';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -62,8 +62,18 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('send-message')
-  handleMsg(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+  handleMsg(@MessageBody() data: Message, @ConnectedSocket() client: Socket) {
     Logger.debug(`> SEND ${JSON.stringify(data)}`);
-    this.server.to(`inbox-${data.receiver}`).emit('inbox-message', data);
+
+    // TODO: Revisión de Timestamp
+    const msg: Message = {
+      ...data,
+      id: v4(),
+      sender: client.handshake.auth.name,
+    };
+
+    this.server.to(`inbox-${data.receiver}`).emit('inbox-message', msg);
+
+    return msg;
   }
 }

@@ -1,5 +1,6 @@
 import { Filesystem, Directory } from "@capacitor/filesystem";
-import { type Chat, type Message, saveMessage } from "./types/Chat"; // Ajusta la ruta a tu módulo
+import { type Chat, saveMessage } from "./types/Chat"; // Ajusta la ruta a tu módulo
+import type { Message } from "dongo-shared";
 
 const CHATS_FOLDER = 'chats';
 

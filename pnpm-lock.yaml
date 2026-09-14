@@ -241,6 +241,9 @@ importers:
       '@types/socket.io':
         specifier: ^3.0.2
         version: 3.0.2(supports-color@8.1.1)
+      dongo-shared:
+        specifier: workspace:*
+        version: link:../../packages/dongo-shared
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -362,12 +365,6 @@ importers:
       '@mui/material':
         specifier: ^9.4.0
         version: 9.4.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@nestjs/platform-socket.io':
-        specifier: ^12.0.1
-        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/websockets@12.0.1)(rxjs@7.8.2)(supports-color@8.1.1)
-      '@nestjs/websockets':
-        specifier: ^12.0.1
-        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.0.1)(@nestjs/platform-socket.io@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@types/socket.io-client':
         specifier: ^3.0.0
         version: 3.0.0(supports-color@8.1.1)

@@ -1,8 +1,8 @@
 import { AppBar, Avatar, Badge, Box, Button, Card, CardActionArea, Container, Dialog, Fab, Stack, TextField, Toolbar, Typography } from "@mui/material";
 import SettingsIcon from '@mui/icons-material/Settings';
 import AddIcon from '@mui/icons-material/Add';
-import { getAllChats, saveMessage, type Chat } from "../types/Chat";
-import { useEffect, useRef, useState } from "react";
+import { type Chat } from "../types/Chat";
+import { useState } from "react";
 import { useConnection } from "../hooks/useConnection";
 
 interface ChatProps {
