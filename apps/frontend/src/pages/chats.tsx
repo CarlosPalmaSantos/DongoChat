@@ -11,8 +11,6 @@ interface ChatProps {
 }
 
 function Chats({ chats, onChatSelected }: ChatProps) {
-
-
   return <Container maxWidth="sm" sx={{ p: 1.75 }}>
     <Stack spacing={1.75}>
       {Object.values(chats).sort((a, b) => (b.lastTimestamp ?? 0) - (a.lastTimestamp ?? 0)).map((c) => (
@@ -71,71 +69,9 @@ interface ChatPageProps {
 }
 
 export default function ChatsPage({ onChatSelected }: ChatPageProps) {
-  const [chats, setChats] = useState<Record<string, Chat>>({});
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [newUser, setNewUser] = useState<string>();
-  const { socket, conn } = useConnection();
-
-  // Mantener la referencia siempre actualizada con el último estado de chats
-  const chatsRef = useRef(chats);
-  useEffect(() => {
-    chatsRef.current = chats;
-  }, [chats]);
-
-  useEffect(() => {
-    getAllChats().then(c => setChats(Object.fromEntries(c.map(c1 => ([c1.uuid, c1])))));
-  }, []);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const currentSocket = socket;
-
-    const handle = async (d: any) => {
-      console.debug('incoming msg', d);
-
-      const prevChat = chatsRef.current[d.sender];
-
-      const currentChat: Chat = prevChat ?? {
-        uuid: d.sender,
-        name: d.sender,
-        last: '',
-        lastTimestamp: Date.now(),
-        pending: 0,
-        messages: []
-      };
-
-      const chatToUpdate: Chat = {
-        ...currentChat,
-        last: d.content,
-        lastTimestamp: Date.now(),
-        pending: (currentChat.pending ?? 0) + 1,
-        uuid: d.sender,
-        name: currentChat.name || d.sender,
-      };
-
-      // Esperamos la resolución asíncrona de saveMessage
-      const updatedChat = await saveMessage(chatToUpdate, {
-        id: d.id,
-        timestamp: d.timestamp,
-        sender: d.sender,
-        receiver: conn!.name!,
-        content: d.content,
-      });
-
-      // Actualizamos el estado con el objeto resolved de Chat
-      setChats(prev => ({
-        ...prev,
-        [d.sender]: updatedChat
-      }));
-    };
-
-    currentSocket.on('inbox-message', handle);
-
-    return () => {
-      currentSocket.off('inbox-message', handle);
-    };
-  }, [socket]);
+  const { editChat, chats } = useConnection();
 
   return (
     <>
@@ -175,20 +111,15 @@ export default function ChatsPage({ onChatSelected }: ChatPageProps) {
             />
             <Button sx={{ bgcolor: theme => theme.palette.primary.main, color: theme => theme.palette.primary.contrastText, width: 'fit-content' }}
               onClick={() => {
-                if (!newUser || newUser in chatsRef.current) return;
-                setChats(prev => {
-                  return {
-                    ...prev,
-                    [newUser]: {
-                      name: newUser,
-                      uuid: newUser,
-                      last: '',
-                      lastTimestamp: Date.now(),
-                      bunchMaxSize: 20,
-                      lastBunch: 0,
-                    }
-                  }
-                })
+                if (!newUser || newUser in chats) return;
+                editChat({
+                  name: newUser,
+                  uuid: newUser,
+                  last: '',
+                  lastTimestamp: Date.now(),
+                  bunchMaxSize: 20,
+                  lastBunch: 0,
+                });
 
                 setDialogOpen(false);
               }}

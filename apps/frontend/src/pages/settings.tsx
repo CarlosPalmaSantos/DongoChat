@@ -4,6 +4,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HelpIcon from '@mui/icons-material/Help';
 import { useConnection } from "../hooks/useConnection";
 import { useState } from "react";
+import { deleteAllChats } from "../types/Chat";
 
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
   const { conn, editConn, ping } = useConnection();
@@ -98,6 +99,17 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         sx={{ borderRadius: 1 }}
       >
         Check Server
+      </Button>
+      <Button
+        variant="contained"
+        size="large"
+        startIcon={<HelpIcon />}
+        onClick={() => {
+          deleteAllChats();
+        }}
+        sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText }}
+      >
+        DELETE
       </Button>
       <Snackbar
         open={!!error}

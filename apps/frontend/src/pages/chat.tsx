@@ -3,7 +3,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SendIcon from '@mui/icons-material/Send';
 import { useState, useEffect, useRef, useCallback } from "react";
 import React from "react";
-import { loadBunch, saveChatMetadata, saveMessage, type Chat, type Message } from "../types/Chat.ts";
+import { loadBunch, saveMessage, type Chat, type Message } from "../types/Chat.ts";
 import { v4 } from "uuid";
 import { useConnection } from "../hooks/useConnection.tsx";
 
@@ -30,7 +30,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
   const [message, setMessage] = useState<string>(""); const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
-  const { socket, conn } = useConnection();
+  const { socket, conn, editChat } = useConnection();
 
   const currentBunchRef = useRef<number>(chat.lastBunch);
 
@@ -55,7 +55,8 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
           setHasMore(false);
         }
         setLoading(false);
-        saveChatMetadata({ ...chat, pending: 0 });
+
+        editChat({ ...chat, pending: 0 })
       }
 
       function handleMessage(msg: Message) {
