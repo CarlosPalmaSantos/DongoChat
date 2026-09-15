@@ -68,7 +68,7 @@ const MessageItem = React.memo(
 
 export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clearSelectedChat: () => void, me: string }) {
   const [message, setMessage] = useState<string>("");
-  const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  const [chatHistory, setChatHistory] = useState<Record<string, Message>>({});
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
   const { socket, conn, editChat } = useConnection();
@@ -123,10 +123,10 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
       const bunch = await loadBunch(chat.uuid, chat.lastBunch);
       if (isMounted) {
         if (bunch && bunch.messages) {
-          setChatHistory(bunch.messages);
+          setChatHistory(Object.fromEntries(bunch.messages.map(m => [m.id, m])));
           setHasMore(chat.lastBunch > 0);
         } else {
-          setChatHistory([]);
+          setChatHistory({});
           setHasMore(false);
         }
         setLoading(false);
@@ -137,14 +137,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
       function handleMessage(msg: Message) {
         if (msg.sender !== chat.name) return;
 
-        setChatHistory(prev => {
-          const exists = prev.some(item => item.id === msg.id);
-
-          if (exists) {
-            return prev;
-          }
-          return [...prev, msg];
-        });
+        setChatHistory(prev => ({ [msg.id]: msg, ...prev }));
 
         saveMessage(chat, msg)
       }
@@ -174,9 +167,8 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
       currentBunchRef.current = nextBunchToLoad;
 
       setChatHistory((prev) => {
-        const existingIds = new Set(prev.map((msg) => msg.id));
-        const newUniqueMessages = bunch.messages.filter((msg) => !existingIds.has(msg.id));
-        return [...newUniqueMessages, ...prev];
+        const bunchMessages = Object.fromEntries(bunch.messages.map(m => [m.id, m]))
+        return { ...bunchMessages, ...prev };
       });
       setHasMore(nextBunchToLoad > 0);
     } else {
@@ -206,6 +198,9 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
   // TODO: mover el envío parcialmente al Provider
   const handleSendMessage = async () => {
+
+    inputRef.current?.focus();
+
     if (isSendingRef.current) return;
     if (message.trim() === '') return;
 
@@ -220,13 +215,15 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
     // TODO: Utilizar el mensaje devuelto por el servidor
     setMessage('');
-    inputRef.current?.focus();
 
     // TODO: Utilizar asíncrono, para ello utilizar mensajes temporales
-    const msg = await socket?.emitWithAck('send-message', prevmsg);
+    const msg = await socket?.emitWithAck('send-message', prevmsg) as Message;
     // TODO: modificación del chat en memoria tb
+    //
 
-    setChatHistory((prev) => [...prev, msg]);
+    console.log('saving chat history', msg)
+
+    setChatHistory((prev) => ({ [msg.id]: msg, ...prev }));
 
     saveMessage(chat, msg); // No esperar para mas fluidez
 
@@ -290,7 +287,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
         }}
       >
         {/* Renderizamos de forma segura asegurando que chatHistory siempre es array */}
-        {(chatHistory || []).slice().sort((a, b) => b.timestamp - a.timestamp).map((v) => (
+        {(Object.values(chatHistory) || []).slice().sort((a, b) => b.timestamp - a.timestamp).map((v) => (
           <MessageItem
             key={v.id}
             message={v}
