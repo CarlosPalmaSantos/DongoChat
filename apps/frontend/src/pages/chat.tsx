@@ -27,7 +27,7 @@ const MessageItem = React.memo(({ message, style }: { message: string, style: 'm
 ));
 
 export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clearSelectedChat: () => void, me: string }) {
-  const [message, setMessage] = useState<string>(""); 
+  const [message, setMessage] = useState<string>("");
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
@@ -131,12 +131,13 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
   }, [loadMoreMessages, loading, hasMore]);
 
   // 4. Enviar mensaje
+  // TODO: mover el envío parcialmente al Provider
   const handleSendMessage = async () => {
     if (message.trim() === '') return;
 
     isSendingRef.current = true;
     const prevmsg: Partial<Message> = {
-      sender: conn!.name!,
+      sender: conn!.user!.name,
       receiver: chat.name,
       timestamp: Date.now(),
       content: message,
@@ -145,6 +146,8 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
     // TODO: Utilizar el mensaje devuelto por el servidor
     const msg = await socket?.emitWithAck('send-message', prevmsg);
+
+    // TODO: modificación del chat en memoria tb
 
     // Actualizar UI en memoria
     setChatHistory((prev) => [...prev, msg]);
@@ -217,7 +220,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
           <MessageItem
             key={v.id}
             message={v.content}
-            style={v.sender === conn?.name ? 'me' : 'other'}
+            style={v.sender === conn?.user?.name ? 'me' : 'other'}
           />
         ))}
 

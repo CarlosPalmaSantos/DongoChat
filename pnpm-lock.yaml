@@ -242,7 +242,7 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2(supports-color@8.1.1)
       dongo-shared:
-        specifier: workspace:*
+        specifier: workspace:0
         version: link:../../packages/dongo-shared
       reflect-metadata:
         specifier: ^0.2.2

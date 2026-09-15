@@ -10,53 +10,61 @@ import {
 } from '@nestjs/websockets';
 import { Socket, Server } from 'socket.io';
 import { v4 } from 'uuid';
-import { type Message } from 'dongo-shared';
+import { type Message, type User } from 'dongo-shared';
+
+function getUser(client: Socket): User {
+  return client.handshake.auth as User;
+}
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   conectedUsers: Record<string, Socket> = {};
-  storedUsers: Record<string, Record<string, Message>> = {};
+  registeredUsers: Record<
+    string,
+    { inbox: Record<string, Message>; user: User }
+  > = {};
 
   @WebSocketServer()
   server!: Server;
 
+  getRegUser(u: User | Socket | string) {
+    if (typeof u === 'string') return this.registeredUsers[u];
+    if ('handshake' in u)
+      return this.registeredUsers[(u.handshake.auth as User).id];
+    return this.registeredUsers[u.id];
+  }
+
   async handleConnection(client: Socket) {
-    const auth = client.handshake.auth as {
-      name: string;
-      pass: string;
-    };
+    const auth: User = getUser(client);
 
-    Logger.debug(`> Client '${auth.name}' connected`);
-    this.conectedUsers[auth.name] = client;
-    await client.join(`inbox-${auth.name}`);
-
-    setTimeout(() => {
-      Logger.debug('SENDING');
-      this.server.to(`inbox-${auth.name}`).emit('inbox-message', {
-        id: v4(),
-        timestamp: Date.now(),
-        sender: 'system',
-        receiver: auth.name,
-        content: 'You are login',
-      });
-    }, 500);
-
-    if (auth.name in this.storedUsers) {
-      Logger.debug(
-        `SENDING INBOX [${JSON.stringify(this.storedUsers[auth.name])}]`,
-      );
-      client.emit('connected-inbox', this.storedUsers[auth.name]);
-      delete this.storedUsers[auth.name];
+    if (!(auth.id in this.registeredUsers)) {
+      this.registeredUsers[auth.id] = {
+        inbox: {},
+        user: auth,
+      };
+    } else if (this.registeredUsers[auth.id].user.pass !== auth.pass) {
+      Logger.debug('> Client incorrect password');
+      client.disconnect(true);
+      return;
     }
+
+    Logger.debug(`> Client '${auth.id}' connected`);
+    this.conectedUsers[auth.name] = client;
+
+    await client.join(`inbox-${auth.id}`);
+
+    const regUser = this.getRegUser(auth);
+
+    Logger.debug(
+      `SENDING INBOX [${JSON.stringify(Object.keys(regUser.inbox)).length}]`,
+    );
+    client.emit('connected-inbox', regUser.inbox);
+    regUser.inbox = {};
   }
 
   handleDisconnect(client: Socket) {
-    const auth = client.handshake.auth as {
-      name: string;
-      pass: string;
-    };
-
-    delete this.conectedUsers[auth.name];
+    const auth = getUser(client);
+    delete this.conectedUsers[auth.id];
 
     Logger.debug(`> Client '${auth.name}' disconnected`);
   }
@@ -66,14 +74,15 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ): string {
-    Logger.debug(`> PING FROM ${client.handshake.auth.name}`);
+    const auth = getUser(client);
+    Logger.debug(`> PING FROM ${auth.id} `);
     return 'pong';
   }
 
   @SubscribeMessage('send-message')
   handleMsg(@MessageBody() data: Message, @ConnectedSocket() client: Socket) {
-    Logger.debug(`> SEND ${JSON.stringify(data)}`);
-    const sender = client.handshake.auth.name;
+    Logger.debug(`> SEND ${JSON.stringify(data)} `);
+    const sender = getUser(client).id;
 
     // TODO: Revisión de Timestamp
     const msg: Message = {
@@ -82,12 +91,15 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
       sender,
     };
 
+    // TODO: Revisión existencia de receiver
+    const receiver = this.getRegUser(msg.receiver);
+    if (!receiver) throw new Error('Inexistent Receiver');
+
     if (msg.receiver in this.conectedUsers) {
       this.server.to(`inbox-${data.receiver}`).emit('inbox-message', msg);
       Logger.debug(`Resending...`);
     } else {
-      if (!this.storedUsers[msg.receiver]) this.storedUsers[msg.receiver] = {};
-      this.storedUsers[msg.receiver][msg.id] = msg;
+      receiver.inbox[msg.id] = msg;
       Logger.debug(`Storing...`);
     }
 

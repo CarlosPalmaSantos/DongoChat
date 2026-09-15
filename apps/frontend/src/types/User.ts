@@ -1,14 +1,14 @@
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
+import type { User } from "dongo-shared";
 
 export interface ConnectionSettings {
   ip?: string,
-  name?: string,
-  uuid?: string,
-  token?: string,
+  user?: User;
 }
 
 export const saveConnectionSettings = async (conn: ConnectionSettings): Promise<void> => {
   console.log('Saving')
+  console.log(conn)
   await Filesystem.writeFile({
     path: "con.json",
     data: JSON.stringify(conn, null, 2),

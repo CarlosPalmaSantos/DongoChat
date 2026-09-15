@@ -18,7 +18,6 @@ import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 import ChatsPage from './pages/chats';
 import ChatPage from './pages/chat';
-import { initializeMockData } from './seedDatabase';
 import type { Chat } from './types/Chat';
 import SettingsPage from './pages/settings';
 import { ConnectionProvider } from './providers/ConnectionProvider';
@@ -96,17 +95,6 @@ export function App() {
   useEffect(() => {
     if (isCalledRef.current) return;
     isCalledRef.current = true;
-
-    const prepareStorage = async () => {
-      try {
-        // Inicializa el sistema de ficheros con los datos de prueba
-        await initializeMockData();
-      } catch (err) {
-        console.error("Error inicializando los datos de prueba:", err);
-      }
-    };
-
-    prepareStorage();
   }, []);
 
   useEffect(() => {

@@ -7,7 +7,12 @@ import { useState } from "react";
 import { deleteAllChats } from "../types/Chat";
 
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
-  const { conn, editConn, ping } = useConnection();
+  const { conn, editConn, editUser, ping } = useConnection();
+
+  const [ip, setIp] = useState<string | undefined>(conn?.ip);
+  const [name, setName] = useState<string>(conn?.user?.name ?? '');
+  const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
+
   const [openPingSnackbar, setOpenPingSnackbar] = useState(false);
   const [error, setError] = useState<string | undefined>()
   const [pingResult, setPingResult] = useState(-1);
@@ -67,8 +72,22 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         fullWidth
         label="Name"
         variant="outlined"
-        value={conn?.name}
-        onChange={e => { editConn({ name: e.target.value }) }}
+        value={name}
+        onChange={e => setName(e.target.value.trim())}
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            bgcolor: 'background.paper',
+            borderRadius: 2,
+          }
+        }} />
+      <TextField
+        fullWidth
+        label="Password"
+        variant="outlined"
+        type="password"
+        hidden={true}
+        value={pass}
+        onChange={e => setPass(e.target.value)}
         sx={{
           '& .MuiOutlinedInput-root': {
             bgcolor: 'background.paper',
@@ -80,8 +99,8 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         label="IP Address"
         variant="outlined"
         type={'url'}
-        value={conn?.ip}
-        onChange={e => { editConn({ ip: e.target.value }) }}
+        value={ip}
+        onChange={e => { setIp(e.target.value.trim()) }}
         sx={{
           '& .MuiOutlinedInput-root': {
             bgcolor: 'background.paper',
@@ -94,7 +113,26 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         size="large"
         startIcon={<HelpIcon />}
         onClick={() => {
-          ping().then(r => { setPingResult(r); if (r >= 0) setOpenPingSnackbar(true) }).catch(setError)
+
+          if (!ip || !name || !pass)
+            return
+
+          console.log(`name: ${name}`)
+
+          if (ip !== conn?.ip) {
+            editConn({ ip })
+          }
+
+          editUser({
+            id: name,
+            name: name,
+            pass: pass
+          })
+
+          console.log('timeouting')
+          setTimeout(() =>
+            ping().then(r => { setPingResult(r); if (r >= 0) setOpenPingSnackbar(true) }).catch(setError),
+            1000)
         }}
         sx={{ borderRadius: 1 }}
       >
