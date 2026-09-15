@@ -6,25 +6,65 @@ import React from "react";
 import { loadBunch, saveMessage, type Chat } from "../types/Chat.ts";
 import { useConnection } from "../hooks/useConnection.tsx";
 import type { Message } from "dongo-shared";
+import { createTranslator } from 'short-uuid';
 
-const MessageItem = React.memo(({ message, style }: { message: string, style: 'me' | 'other' }) => (
-  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-    <Paper
-      variant="outlined"
-      sx={{
-        p: 2,
-        alignSelf: style === 'me' ? "self-end" : "self-start",
-        maxWidth: '80%',
-        border: 0,
-        borderRadius: 1.25,
-        color: (theme) => style === 'me' ? theme.palette.primary.contrastText : theme.palette.secondary.contrastText,
-        bgcolor: (theme) => style === 'me' ? theme.palette.primary.main : theme.palette.secondary.main
-      }}
-    >
-      <Typography variant="body1">{message}</Typography>
-    </Paper>
-  </Box>
-));
+type MenuState = {
+  message: Message;
+  top: number;
+  left?: number;
+  right?: number;
+};
+
+const MessageItem = React.memo(
+  ({
+    message,
+    style,
+    onContextMenu,
+  }: {
+    message: Message;
+    style: 'me' | 'other';
+    onContextMenu: (message: Message, rect: DOMRect) => void;
+  }) => {
+    const ref = React.useRef<HTMLDivElement>(null);
+
+    const handleContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+
+      const rect = ref.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      onContextMenu(message, rect);
+    };
+
+    return (
+      <Box
+        sx={{ display: 'flex', justifyContent: style === 'me' ? 'flex-end' : 'flex-start' }}
+        onContextMenu={handleContextMenu}
+      >
+        <Paper
+          ref={ref}
+          variant="outlined"
+          sx={{
+            p: 2,
+            maxWidth: '80%',
+            border: 0,
+            borderRadius: 1.25,
+            color: (theme) =>
+              style === 'me'
+                ? theme.palette.primary.contrastText
+                : theme.palette.secondary.contrastText,
+            bgcolor: (theme) =>
+              style === 'me'
+                ? theme.palette.primary.main
+                : theme.palette.secondary.main,
+          }}
+        >
+          <Typography>{message.content}</Typography>
+        </Paper>
+      </Box>
+    );
+  },
+);
 
 export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clearSelectedChat: () => void, me: string }) {
   const [message, setMessage] = useState<string>("");
@@ -32,12 +72,45 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
   const { socket, conn, editChat } = useConnection();
+  const shortify = createTranslator()
 
   const currentBunchRef = useRef<number>(chat.lastBunch);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
   const isSendingRef = useRef<boolean>(false);
+
+  const [menuState, setMenuState] = useState<MenuState | null>(null);
+
+
+  const handleOpenMenu = useCallback((msg: Message, rect: DOMRect) => {
+    const width = 220;
+
+    setMenuState(
+      rect.right + width <= window.innerWidth
+        ? { message: msg, top: rect.top, left: rect.right + 8 }
+        : { message: msg, top: rect.top, right: window.innerWidth - rect.left + 8 },
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!menuState) return;
+
+
+    const closeMenu = () => setMenuState(null);
+
+    const handlePointerDown = () => closeMenu();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMenu();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuState]);
 
   useEffect(() => {
     let isMounted = true;
@@ -67,7 +140,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
           const exists = prev.some(item => item.id === msg.id);
 
           if (exists) {
-            return prev; // Devolvemos el estado sin cambios
+            return prev;
           }
           return [...prev, msg];
         });
@@ -98,7 +171,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
     if (bunch && bunch.messages.length > 0) {
       currentBunchRef.current = nextBunchToLoad;
-      // Anteponemos los mensajes del bunch más antiguo al historial actual
+
       setChatHistory((prev) => {
         const existingIds = new Set(prev.map((msg) => msg.id));
         const newUniqueMessages = bunch.messages.filter((msg) => !existingIds.has(msg.id));
@@ -112,7 +185,6 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
     setLoading(false);
   }, [loading, hasMore, chat.uuid]);
 
-  // 3. Observer para el scroll infinito hacia arriba
   useEffect(() => {
     const sentinel = topSentinelRef.current;
     if (!sentinel) return;
@@ -130,7 +202,6 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
     return () => observer.disconnect();
   }, [loadMoreMessages, loading, hasMore]);
 
-  // 4. Enviar mensaje
   // TODO: mover el envío parcialmente al Provider
   const handleSendMessage = async () => {
     if (message.trim() === '') return;
@@ -149,11 +220,9 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
     // TODO: modificación del chat en memoria tb
 
-    // Actualizar UI en memoria
     setChatHistory((prev) => [...prev, msg]);
     setMessage('');
 
-    // Guardar en el filesystem (se encarga de crear nuevo bunch si bunchMaxSize se supera)
     await saveMessage(chat, msg);
 
     requestAnimationFrame(() => {
@@ -204,6 +273,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
       <Box
         ref={containerRef}
+        onScroll={() => setMenuState(null)}
         sx={{
           flexGrow: 1,
           minHeight: 0,
@@ -219,8 +289,9 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
         {(chatHistory || []).slice().sort((a, b) => b.timestamp - a.timestamp).map((v) => (
           <MessageItem
             key={v.id}
-            message={v.content}
-            style={v.sender === conn?.user?.name ? 'me' : 'other'}
+            message={v}
+            style={v.sender === conn?.user?.id ? 'me' : 'other'}
+            onContextMenu={handleOpenMenu}
           />
         ))}
 
@@ -230,6 +301,50 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
           </Box>
         )}
       </Box>
+
+      {/* Única instancia del menú contextual para todo el chat */}
+      {menuState && (
+        <Paper
+          elevation={6}
+          sx={{
+            position: 'fixed',
+            top: menuState.top,
+            left: menuState.left,
+            right: menuState.right,
+            p: 2,
+            zIndex: 1500,
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>ID:</Typography>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
+              {shortify.fromUUID(menuState.message.id)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>Sender:</Typography>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
+              {menuState.message.sender}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>Receiver:</Typography>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
+              {menuState.message.receiver}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>Timestamp:</Typography>
+            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
+              {menuState.message.timestamp}
+            </Typography>
+          </Box>
+
+
+        </Paper>
+      )}
 
       <Box
         sx={{
