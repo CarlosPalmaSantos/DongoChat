@@ -22,10 +22,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const saveQueuesRef = useRef<Map<string, Promise<void>>>(new Map());
 
-  const handleIncomingMessage = useCallback(async (d: any) => {
-    console.debug('incoming msg', d);
+  const handleIncomingMessage = useCallback(async (msg: Message) => {
+    console.debug('incoming msg', msg);
 
-    const chatUuid = d.sender;
+    const chatUuid = msg.sender;
 
     const previousQueue = saveQueuesRef.current.get(chatUuid) ?? Promise.resolve();
 
@@ -44,17 +44,17 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
       const chatToUpdate: Chat = {
         ...currentChat,
-        last: d.content,
+        last: msg.content,
         lastTimestamp: Date.now(),
         pending: (currentChat.pending ?? 0) + 1,
       };
 
       const updatedChat = await saveMessage(chatToUpdate, {
-        id: d.id,
-        timestamp: d.timestamp,
-        sender: d.sender,
+        id: msg.id,
+        timestamp: msg.timestamp,
+        sender: msg.sender,
         receiver: conn!.user!.name!,
-        content: d.content,
+        content: msg.content,
       });
 
       chatsRef.current = {
@@ -66,6 +66,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         ...prev,
         [chatUuid]: updatedChat,
       }));
+
+      socket?.emit('ack-message', msg.id)
     });
 
     // Guardamos la promesa actual como cola
@@ -109,10 +111,11 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       });
 
       // TODO: Mejorar respuesta de inicio
-      activeSocket.once('connected-inbox', (d: Record<string, Message>) => {
+      activeSocket.on('connected-inbox', (d: Record<string, Message>) => {
         console.log('connected inbox');
         console.log(d)
         Object.values(d).forEach(handleIncomingMessage);
+        activeSocket?.emit('ack-connected-inbox');
         setSocket(activeSocket); // Actualizamos el estado para los demás componentes
       });
 
@@ -120,10 +123,11 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
     // Función de limpieza
     return () => {
+      activeSocket?.off('connected-inbox');
       activeSocket?.disconnect(); // Desconecta la instancia real que creamos arriba
       setSocket(undefined);
     };
-  }, [conn]);
+  }, [conn, handleIncomingMessage]);
 
   function emit(event: string, data: unknown) {
     return new Promise((resolve) => {

@@ -16,7 +16,11 @@ function getUser(client: Socket): User {
   return client.handshake.auth as User;
 }
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+  cors: { origin: '*' },
+  pingInterval: 20000,
+  pingTimeout: 5000,
+})
 export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   conectedUsers: Record<string, Socket> = {};
   registeredUsers: Record<
@@ -43,23 +47,22 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
         user: auth,
       };
     } else if (this.registeredUsers[auth.id].user.pass !== auth.pass) {
-      Logger.debug('> Client incorrect password');
+      Logger.debug('1 > Client incorrect password');
       client.disconnect(true);
       return;
     }
 
     Logger.debug(`> Client '${auth.id}' connected`);
-    this.conectedUsers[auth.name] = client;
+    this.conectedUsers[auth.id] = client;
 
     await client.join(`inbox-${auth.id}`);
 
     const regUser = this.getRegUser(auth);
 
-    Logger.debug(
-      `SENDING INBOX [${JSON.stringify(Object.keys(regUser.inbox)).length}]`,
-    );
+    Logger.debug(`SENDING INBOX [${Object.keys(regUser.inbox).length}]`);
+    Logger.debug(JSON.stringify(Object.values(regUser.inbox)));
+
     client.emit('connected-inbox', regUser.inbox);
-    regUser.inbox = {};
   }
 
   handleDisconnect(client: Socket) {
@@ -95,14 +98,31 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     const receiver = this.getRegUser(msg.receiver);
     if (!receiver) throw new Error('Inexistent Receiver');
 
-    if (msg.receiver in this.conectedUsers) {
-      this.server.to(`inbox-${data.receiver}`).emit('inbox-message', msg);
-      Logger.debug(`Resending...`);
-    } else {
-      receiver.inbox[msg.id] = msg;
-      Logger.debug(`Storing...`);
-    }
+    receiver.inbox[msg.id] = msg;
+    this.server.to(`inbox-${data.receiver}`).emit('inbox-message', msg);
 
     return msg;
+  }
+
+  @SubscribeMessage('ack-message')
+  handleAck(@MessageBody() msgId: string, @ConnectedSocket() client: Socket) {
+    const auth = getUser(client);
+    const regUser = this.getRegUser(auth.id);
+
+    if (regUser && regUser.inbox[msgId]) {
+      delete regUser.inbox[msgId];
+      Logger.debug(`< ACK received for ${msgId}. Message removed from inbox.`);
+    }
+  }
+
+  @SubscribeMessage('ack-connected-inbox')
+  handleAckInbox(@ConnectedSocket() client: Socket) {
+    const auth = getUser(client);
+    const regUser = this.getRegUser(auth.id);
+
+    if (regUser) {
+      regUser.inbox = {};
+      Logger.debug(`< Cleared inbox for connected user ${auth.id}`);
+    }
   }
 }
