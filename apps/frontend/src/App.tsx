@@ -21,7 +21,6 @@ import ChatPage from './pages/chat';
 import type { Chat } from './types/Chat';
 import SettingsPage from './pages/settings';
 import { ConnectionProvider } from './providers/ConnectionProvider';
-import { LoggerContext } from './contexts/LoggerContext';
 import { LoggerProvider } from './providers/LoggerProvider';
 
 export function App() {

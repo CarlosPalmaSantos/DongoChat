@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { LoggerContext } from "../contexts/LoggerContext";
 import { Snackbar } from "@mui/material";
 
@@ -7,6 +7,7 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState<string>()
   const [logHistory, setLogHistory] = useState<string[]>([])
+  const [showLevel, setShowLevel] = useState<'none' | 'error' | 'warn' | 'log' | 'debug'>('error')
 
   const safeStringify = (data: any): string => {
     if (typeof data === 'string') return data;
@@ -17,7 +18,7 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
     try {
       return JSON.stringify(
         data,
-        (key, value) => {
+        (_, value) => {
           if (typeof value === 'object' && value !== null) {
             if (seen.has(value)) return '[Circular]';
             seen.add(value);
@@ -45,26 +46,35 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
 
   function log(...data: any[]) {
     console.log(...data)
-    anyLog(...data)
+
+    if (showLevel !== 'none' && showLevel !== 'error' && showLevel !== 'warn')
+      anyLog(...data)
   }
 
   function debug(...data: any[]) {
     console.debug(...data)
-    anyLog(...data)
+
+    if (showLevel !== 'none' && showLevel !== 'error' && showLevel !== 'warn' && showLevel !== 'log')
+      anyLog(...data)
   }
 
   function warn(...data: any[]) {
     console.warn(...data)
-    anyLog(...data)
+
+
+    if (showLevel !== 'none' && showLevel !== 'error')
+      anyLog(...data)
   }
 
   function error(...data: any[]) {
     console.error(...data)
-    anyLog(...data)
+
+    if (showLevel !== 'none')
+      anyLog(...data)
   }
 
 
-  return <LoggerContext.Provider value={{ log, debug, error, warn, history: logHistory }}>
+  return <LoggerContext.Provider value={{ log, debug, error, warn, history: logHistory, showLevel, setShowLevel }}>
     {children}
     <Snackbar
       open={open}
