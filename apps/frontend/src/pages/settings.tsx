@@ -1,10 +1,11 @@
-import { AppBar, Box, Button, IconButton, Paper, Snackbar, TextField, Toolbar, Typography } from "@mui/material";
+import { AppBar, Box, Button, Card, Dialog, IconButton, Paper, Snackbar, Stack, TextField, Toolbar, Typography } from "@mui/material";
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HelpIcon from '@mui/icons-material/Help';
 import { useConnection } from "../hooks/useConnection";
 import { useState } from "react";
 import { deleteAllChats } from "../types/Chat";
+import { useLog } from "../hooks/useLog";
 
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
   const { conn, editConn, editUser, ping } = useConnection();
@@ -16,6 +17,9 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
   const [openPingSnackbar, setOpenPingSnackbar] = useState(false);
   const [error, setError] = useState<string | undefined>()
   const [pingResult, setPingResult] = useState(-1);
+
+  const console = useLog();
+  const [openLog, setOpenLog] = useState(false);
 
   return <Paper
     square
@@ -142,6 +146,15 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         variant="contained"
         size="large"
         startIcon={<HelpIcon />}
+        onClick={() => setOpenLog(true)}
+        sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText }}
+      >
+        Logs
+      </Button>
+      <Button
+        variant="contained"
+        size="large"
+        startIcon={<HelpIcon />}
         onClick={() => {
           deleteAllChats();
         }}
@@ -162,6 +175,29 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         onClose={() => setOpenPingSnackbar(false)}
         message={`Pong received in ${pingResult}ms`}
       />
+      <Dialog
+        open={openLog}
+        onClose={() => setOpenLog(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <Card sx={{ display: 'flex', flexDirection: 'column', p: 4 }}>
+          <Stack sx={{ gap: 2, overflowY: 'auto', maxHeight: '70vh' }}>
+            {console.history.map((m, index) => (
+              <Box
+                key={index}
+                sx={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {m}
+              </Box>
+            ))}
+          </Stack>
+        </Card>
+      </Dialog>
     </Box>
   </Paper>
 }
