@@ -28,8 +28,8 @@ export const loadConnectionSettings = async (): Promise<ConnectionSettings> => {
   }
   catch {
     const res = {
-      name: 'NONAME',
-      ip: 'ws://localhost:3000'
+      name: '<NONAME>',
+      ip: 'wss://dongo.magin.top'
     }
 
     await saveConnectionSettings(res);

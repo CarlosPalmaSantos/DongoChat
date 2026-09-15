@@ -79,6 +79,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
   const containerRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
   const isSendingRef = useRef<boolean>(false);
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const [menuState, setMenuState] = useState<MenuState | null>(null);
 
@@ -202,8 +203,10 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
     return () => observer.disconnect();
   }, [loadMoreMessages, loading, hasMore]);
 
+
   // TODO: mover el envío parcialmente al Provider
   const handleSendMessage = async () => {
+    if (isSendingRef.current) return;
     if (message.trim() === '') return;
 
     isSendingRef.current = true;
@@ -216,14 +219,16 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
 
     // TODO: Utilizar el mensaje devuelto por el servidor
-    const msg = await socket?.emitWithAck('send-message', prevmsg);
+    setMessage('');
+    inputRef.current?.focus();
 
+    // TODO: Utilizar asíncrono, para ello utilizar mensajes temporales
+    const msg = await socket?.emitWithAck('send-message', prevmsg);
     // TODO: modificación del chat en memoria tb
 
     setChatHistory((prev) => [...prev, msg]);
-    setMessage('');
 
-    await saveMessage(chat, msg);
+    saveMessage(chat, msg); // No esperar para mas fluidez
 
     requestAnimationFrame(() => {
       if (containerRef.current) {
@@ -233,8 +238,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
         });
       }
     });
-
-
+    isSendingRef.current = false;
   };
 
   return (
@@ -359,6 +363,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
         }}
       >
         <TextField
+          inputRef={inputRef}
           multiline
           maxRows={4}
           fullWidth
