@@ -3,7 +3,7 @@ import { loadConnectionSettings, saveConnectionSettings, type ConnectionSettings
 import { io, Socket } from "socket.io-client";
 import { ConnectionContext } from "../contexts/ConnectionContext";
 import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/Chat";
-import { isComplete, type Message, type User } from "dongo-shared";
+import { type Message, type User } from "dongo-shared";
 
 export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [conn, setConn] = useState<ConnectionSettings>();
@@ -53,11 +53,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         id: d.id,
         timestamp: d.timestamp,
         sender: d.sender,
-        receiver: conn!.name!,
+        receiver: conn!.user!.name!,
         content: d.content,
       });
 
-      // Importante: actualizar el ref inmediatamente
       chatsRef.current = {
         ...chatsRef.current,
         [chatUuid]: updatedChat,
