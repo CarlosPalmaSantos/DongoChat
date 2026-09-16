@@ -225,7 +225,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
           size="large"
           startIcon={<HelpIcon />}
           onClick={() => setOpenLog(true)}
-          sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText }}
+          sx={{ borderRadius: 1, bgcolor: theme => theme.palette.secondary.main, color: theme => theme.palette.secondary.contrastText }}
         >
           Logs
         </Button>
