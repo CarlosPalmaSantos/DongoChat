@@ -32,7 +32,6 @@ async function checkForUpdate() {
   const MANIFEST_URL =
     'https://github.com/CarlosPalmaSantos/DongoChat/releases/latest/download/manifest.json'
 
-  // Use native HTTP client instead of browser window.fetch
   const response = await CapacitorHttp.get({
     url: MANIFEST_URL,
     headers: { 'Cache-Control': 'no-cache' }
@@ -42,7 +41,12 @@ async function checkForUpdate() {
     throw new Error(`Manifest fetch failed: ${response.status}`)
   }
 
-  const manifest: { version: string; url: string; checksum: string } = response.data
+  const manifest: { version: string; url: string; checksum?: string } =
+    typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+
+  if (!manifest || !manifest.url || !manifest.version) {
+    throw new Error(`Invalid manifest structure: ${JSON.stringify(manifest)}`)
+  }
 
   const current = await CapacitorUpdater.current()
   if (current.bundle.version === manifest.version) {
@@ -52,6 +56,7 @@ async function checkForUpdate() {
   const bundle = await CapacitorUpdater.download({
     url: manifest.url,
     version: manifest.version,
+    checksum: manifest.checksum,
   })
 
   await CapacitorUpdater.set(bundle)
