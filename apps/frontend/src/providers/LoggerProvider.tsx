@@ -31,7 +31,9 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
     } catch {
       return String(data);
     }
-  }; function anyLog(...data: any[]) {
+  };
+
+  function anyLog(...data: any[]) {
     if (data.length === 0) return;
 
     const timestamp = new Date().toLocaleTimeString();
@@ -45,21 +47,21 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
   }
 
   function log(...data: any[]) {
-    console.log(...data)
+    console.log(...data, `shlvl: ${showLevel}`)
 
     if (showLevel !== 'none' && showLevel !== 'error' && showLevel !== 'warn')
       anyLog(...data)
   }
 
   function debug(...data: any[]) {
-    console.debug(...data)
+    console.debug(...data, `shlvl: ${showLevel}`)
 
     if (showLevel !== 'none' && showLevel !== 'error' && showLevel !== 'warn' && showLevel !== 'log')
       anyLog(...data)
   }
 
   function warn(...data: any[]) {
-    console.warn(...data)
+    console.warn(...data, `shlvl: ${showLevel}`)
 
 
     if (showLevel !== 'none' && showLevel !== 'error')
@@ -67,7 +69,7 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
   }
 
   function error(...data: any[]) {
-    console.error(...data)
+    console.error(...data, `shlvl: ${showLevel}`)
 
     if (showLevel !== 'none')
       anyLog(...data)

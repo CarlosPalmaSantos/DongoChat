@@ -22,7 +22,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
   const [error, setError] = useState<string | undefined>()
   const [pingResult, setPingResult] = useState(-1);
 
-  const console = useLog();
+  const logger = useLog();
   const [openLog, setOpenLog] = useState(false);
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
             if (!ip || !name || !pass)
               return
 
-            console.log(`name: ${name}`)
+            logger.log(`name: ${name}`)
 
             if (ip !== conn?.ip) {
               editConn({ ip })
@@ -147,7 +147,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
               pass: pass
             })
 
-            console.log('timeouting')
+            logger.log('timeouting')
             setTimeout(() =>
               ping().then(r => { setPingResult(r); if (r >= 0) setOpenPingSnackbar(true) }).catch(setError),
               1000)
@@ -211,8 +211,8 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
           <Select
             labelId="show-level-label"
             label="Show Level" // Necesario para que corte la línea del borde
-            value={console.showLevel}
-            onChange={e => console.setShowLevel(e.target.value)}
+            value={logger.showLevel}
+            onChange={e => logger.setShowLevel(e.target.value)}
           >
             <MenuItem value={'none'}>None</MenuItem>
             <MenuItem value={'error'}>Error</MenuItem>
@@ -220,7 +220,8 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
             <MenuItem value={'log'}>Log</MenuItem>
             <MenuItem value={'debug'}>Debug</MenuItem>
           </Select>
-        </FormControl>        <Button
+        </FormControl>
+        <Button
           variant="contained"
           size="large"
           startIcon={<HelpIcon />}
@@ -238,7 +239,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
 
           <Card sx={{ display: 'flex', flexDirection: 'column', p: 4 }}>
             <Stack sx={{ gap: 2, overflowY: 'auto', maxHeight: '70vh' }}>
-              {console.history.map((m, index) => (
+              {logger.history.map((m, index) => (
                 <Box
                   key={index}
                   sx={{

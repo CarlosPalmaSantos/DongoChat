@@ -10,7 +10,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [conn, setConn] = useState<ConnectionSettings>();
   const [socket, setSocket] = useState<Socket>();
   const [chats, setChats] = useState<Record<string, Chat>>({});
-  const console = useLog();
+  const logger = useLog();
 
   const chatsRef = useRef(chats);
   useEffect(() => {
@@ -31,7 +31,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   // undefined en cada sitio que lo use.
   const emitSafe = useCallback((event: string, data: unknown) => {
     if (!socketRef.current) {
-      console.warn(`Tried to emit '${event}' with no active socket`);
+      logger.warn(`Tried to emit '${event}' with no active socket`);
       return;
     }
     socketRef.current.emit(event, data);
@@ -55,7 +55,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   // Identidad estable: no depende de `socket` ni de `conn`, así que nunca
   // provoca que otros efectos se re-ejecuten por su culpa.
   const handleIncomingMessage = useCallback(async (msg: Message) => {
-    console.debug('incoming msg', msg);
+    logger.debug('incoming msg', msg);
 
     const chatUuid = msg.sender;
 
@@ -134,7 +134,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     if (!conn) return;
 
     saveConnectionSettings(conn);
-    console.log('conn modified', conn);
+    logger.log('conn modified', conn);
 
     if (!conn.ip || !conn.user) return;
 
@@ -143,7 +143,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     });
 
     const onConnectedInbox = async (d: Record<string, Message>) => {
-      console.log('connected inbox', d);
+      logger.log('connected inbox', d);
       // Procesamos en orden y esperamos cada guardado antes de mandar el
       // ack, para no perder mensajes si la app vuelve a segundo plano
       // justo después de recibir el inbox.
