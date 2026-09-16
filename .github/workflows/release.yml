@@ -41,6 +41,7 @@ jobs:
       # Step 1: Compilar el Frontend y generar APK Debug
       - name: Build Frontend y Sync Capacitor
         run: |
+          pnpm --filter dongo-shared build
           pnpm --filter frontend build
           pnpm --filter frontend exec cap sync
 
