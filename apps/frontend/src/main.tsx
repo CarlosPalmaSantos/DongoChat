@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import { CapacitorUpdater } from '@capgo/capacitor-updater'
 import './index.css'
 import { App } from './App.tsx'
@@ -29,14 +29,20 @@ if (Capacitor.isNativePlatform()) {
 }
 
 async function checkForUpdate() {
-  // TODO: Add to dotenv
   const MANIFEST_URL =
     'https://github.com/CarlosPalmaSantos/DongoChat/releases/latest/download/manifest.json'
 
-  const res = await fetch(MANIFEST_URL, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`)
-  const manifest: { version: string; url: string; checksum: string } =
-    await res.json()
+  // Use native HTTP client instead of browser window.fetch
+  const response = await CapacitorHttp.get({
+    url: MANIFEST_URL,
+    headers: { 'Cache-Control': 'no-cache' }
+  })
+
+  if (response.status !== 200) {
+    throw new Error(`Manifest fetch failed: ${response.status}`)
+  }
+
+  const manifest: { version: string; url: string; checksum: string } = response.data
 
   const current = await CapacitorUpdater.current()
   if (current.bundle.version === manifest.version) {
@@ -47,7 +53,6 @@ async function checkForUpdate() {
     url: manifest.url,
     version: manifest.version,
   })
-
 
   await CapacitorUpdater.set(bundle)
 }

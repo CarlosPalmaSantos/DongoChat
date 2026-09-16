@@ -5,6 +5,12 @@ const config: CapacitorConfig = {
   appName: 'DongoChat',
   webDir: 'dist',
   plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
+    CapacitorUpdater: {
+      autoUpdate: false, // you're calling download/set manually
+    },
     StatusBar: {
       overlaysWebView: true,
     },
