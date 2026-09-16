@@ -3,12 +3,16 @@ import { AppBar, Box, Button, Card, Dialog, FormControl, IconButton, InputLabel,
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HelpIcon from '@mui/icons-material/Help';
 import { useConnection } from "../hooks/useConnection";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { deleteAllChats } from "../types/Chat";
 import { useLog } from "../hooks/useLog";
 
+import { App } from '@capacitor/app'
+
+
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
   const { conn, editConn, editUser, ping } = useConnection();
+  const [version, setVersion] = useState<string>()
 
   const [ip, setIp] = useState<string | undefined>(conn?.ip);
   const [name, setName] = useState<string>(conn?.user?.name ?? '');
@@ -20,6 +24,15 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
 
   const console = useLog();
   const [openLog, setOpenLog] = useState(false);
+
+  useEffect(() => {
+    async function getNativeVersion() {
+      const info = await App.getInfo()
+      return info.version
+    }
+
+    getNativeVersion().then(setVersion)
+  }, [])
 
   return <Paper
     square
@@ -243,5 +256,13 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         </Dialog>
       </Box>
     </Box>
+    <Typography
+      variant="h6"
+      color="primary"
+      align="center"
+      sx={{ fontWeight: 'bold' }}
+    >
+      {version}
+    </Typography>
   </Paper>
 }

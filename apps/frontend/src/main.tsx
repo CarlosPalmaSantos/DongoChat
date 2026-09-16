@@ -1,5 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { Capacitor } from '@capacitor/core'
+import { CapacitorUpdater } from '@capgo/capacitor-updater'
 import './index.css'
 import { App } from './App.tsx'
 
@@ -13,3 +15,39 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// --- Auto-update (Capacitor native only, no-op on web) ---
+if (Capacitor.isNativePlatform()) {
+  // Tell the plugin the bundle that just booted is healthy.
+  // If you don't call this, the plugin will roll back to the previous
+  // working bundle on next launch (crash-loop protection).
+  CapacitorUpdater.notifyAppReady()
+
+  checkForUpdate().catch((err) => {
+    console.error('[auto-update] check failed:', err)
+  })
+}
+
+async function checkForUpdate() {
+  // TODO: Add to dotenv
+  const MANIFEST_URL =
+    'https://github.com/CarlosPalmaSantos/DongoChat/releases/latest/download/manifest.json'
+
+  const res = await fetch(MANIFEST_URL, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`)
+  const manifest: { version: string; url: string; checksum: string } =
+    await res.json()
+
+  const current = await CapacitorUpdater.current()
+  if (current.bundle.version === manifest.version) {
+    return // already up to date
+  }
+
+  const bundle = await CapacitorUpdater.download({
+    url: manifest.url,
+    version: manifest.version,
+  })
+
+
+  await CapacitorUpdater.set(bundle)
+}

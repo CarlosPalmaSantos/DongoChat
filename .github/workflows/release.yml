@@ -66,7 +66,21 @@ jobs:
           cd apps/frontend
           zip -r ../../frontend-dist.zip dist
 
-      # 7. Publicar la Release en GitHub con los binarios
+      # 7. Generar el manifest.json para auto-update
+      - name: Generar manifest.json
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          CHECKSUM=$(sha256sum frontend-dist.zip | cut -d ' ' -f1)
+          cat > manifest.json <<EOF
+          {
+            "version": "$VERSION",
+            "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/frontend-dist.zip",
+            "checksum": "$CHECKSUM"
+          }
+          EOF
+          cat manifest.json
+
+      # 8. Publicar la Release en GitHub con los binarios
       - name: Crear GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -77,5 +91,6 @@ jobs:
           files: |
             apps/frontend/android/app/build/outputs/apk/debug/app-debug.apk
             frontend-dist.zip
+            manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
