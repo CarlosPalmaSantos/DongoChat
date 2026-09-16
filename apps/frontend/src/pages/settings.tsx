@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { deleteAllChats } from "../types/Chat";
 import { useLog } from "../hooks/useLog";
 
-import { App } from '@capacitor/app'
+import { CapacitorUpdater } from "@capgo/capacitor-updater";
 
 
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
@@ -26,14 +26,13 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
   const [openLog, setOpenLog] = useState(false);
 
   useEffect(() => {
-    async function getNativeVersion() {
-      const info = await App.getInfo()
-      return info.version
+    async function getBundleVersion() {
+      const current = await CapacitorUpdater.current()
+      return current.bundle.version
     }
 
-    getNativeVersion().then(setVersion)
+    getBundleVersion().then(setVersion)
   }, [])
-
   return <Paper
     square
     elevation={0}
@@ -255,14 +254,14 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
           </Card>
         </Dialog>
       </Box>
+      <Typography
+        variant="h6"
+        color="primary"
+        align="center"
+        sx={{ fontWeight: 'bold' }}
+      >
+        {version}
+      </Typography>
     </Box>
-    <Typography
-      variant="h6"
-      color="primary"
-      align="center"
-      sx={{ fontWeight: 'bold' }}
-    >
-      {version}
-    </Typography>
   </Paper>
 }
