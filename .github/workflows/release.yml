@@ -63,8 +63,8 @@ jobs:
       # 6. Comprimir la carpeta dist del Frontend
       - name: Comprimir ./dist del Frontend
         run: |
-          cd apps/frontend
-          zip -r ../../frontend-dist.zip dist
+          cd apps/frontend/dist
+          zip -r ../../../frontend-dist.zip .
 
       # 7. Generar el manifest.json para auto-update
       - name: Generar manifest.json
