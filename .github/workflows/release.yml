@@ -10,13 +10,35 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Build frontend
-        id: build
-        uses: ./.github/actions/build-frontend
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Instalar dependencias
+        run: pnpm install
+
+      - name: Actualizar versión en package.json del Frontend
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "Actualizando frontend a la versión $VERSION..."
+          npm --prefix apps/frontend version $VERSION --no-git-tag-version
+
+      - name: Compilar dongo-shared
+        run: pnpm --filter dongo-shared build
+
+      - name: Compilar Frontend
+        run: pnpm --filter frontend build
 
       - name: Comprimir ./dist del Frontend
         run: |
@@ -25,10 +47,11 @@ jobs:
 
       - name: Generar manifest.json
         run: |
+          VERSION=${GITHUB_REF_NAME#v}
           CHECKSUM=$(sha256sum frontend-dist.zip | cut -d ' ' -f1)
           cat > manifest.json <<EOF
           {
-            "version": "${{ steps.build.outputs.version }}",
+            "version": "$VERSION",
             "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/frontend-dist.zip",
             "checksum": "$CHECKSUM"
           }
@@ -53,12 +76,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Build frontend
-        uses: ./.github/actions/build-frontend
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
       - name: Configurar Java JDK (para Android)
         uses: actions/setup-java@v4
@@ -66,8 +97,23 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
+      # Cachea ~/.gradle y reduce llamadas repetidas a Maven Central
       - name: Configurar caché de Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Instalar dependencias
+        run: pnpm install
+
+      - name: Actualizar versión en package.json del Frontend
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          npm --prefix apps/frontend version $VERSION --no-git-tag-version
+
+      - name: Compilar dongo-shared
+        run: pnpm --filter dongo-shared build
+
+      - name: Compilar Frontend
+        run: pnpm --filter frontend build
 
       - name: Sincronizar Capacitor
         run: pnpm --filter frontend exec cap sync
@@ -76,6 +122,7 @@ jobs:
         run: |
           cd apps/frontend/android
           chmod +x gradlew
+          # Reintentos ante 429/timeouts de Maven Central
           ./gradlew assembleDebug \
             -Dorg.gradle.internal.repository.max.tentatives=5 \
             -Dorg.gradle.internal.repository.initial.backoff=2000 \
