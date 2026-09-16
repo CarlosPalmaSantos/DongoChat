@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*.*.*' # Se dispara cuando creas un tag como v1.0.0, v2.1.3, etc.
+      - 'v*.*.*' # Se activa al publicar tags como v1.0.0, v1.2.3, etc.
 
 jobs:
   release:
@@ -16,7 +16,7 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Instalar pnpm
         uses: pnpm/action-setup@v3
@@ -32,32 +32,39 @@ jobs:
       - name: Instalar dependencias
         run: pnpm install
 
+      # 1. Actualizar la versión en apps/frontend/package.json
       - name: Actualizar versión en package.json del Frontend
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           echo "Actualizando frontend a la versión $VERSION..."
           npm --prefix apps/frontend version $VERSION --no-git-tag-version
 
-      # Step 1: Compilar el Frontend y generar APK Debug
-      - name: Build Frontend y Sync Capacitor
-        run: |
-          pnpm --filter dongo-shared build
-          pnpm --filter frontend build
-          pnpm --filter frontend exec cap sync
+      # 2. Compilar la librería compartida dongo-shared
+      - name: Compilar dongo-shared
+        run: pnpm --filter dongo-shared build
 
+      # 3. Compilar el Frontend de React / Vite
+      - name: Compilar Frontend
+        run: pnpm --filter frontend build
+
+      # 4. Sincronizar artefactos con Capacitor (Android)
+      - name: Sincronizar Capacitor
+        run: pnpm --filter frontend exec cap sync
+
+      # 5. Generar el APK de Android
       - name: Compilar APK Debug
         run: |
           cd apps/frontend/android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      # Step 2: Crear el archivo comprimido del dist del Frontend
+      # 6. Comprimir la carpeta dist del Frontend
       - name: Comprimir ./dist del Frontend
         run: |
           cd apps/frontend
           zip -r ../../frontend-dist.zip dist
 
-      # Step 3: Crear la Release en GitHub y subir los assets
+      # 7. Publicar la Release en GitHub con los binarios
       - name: Crear GitHub Release
         uses: softprops/action-gh-release@v2
         with:
