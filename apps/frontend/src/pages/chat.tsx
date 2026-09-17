@@ -1,4 +1,4 @@
-import { AppBar, Avatar, Box, IconButton, Paper, TextField, Toolbar, Typography, CircularProgress } from "@mui/material";
+import { AppBar, Avatar, Box, IconButton, Paper, TextField, Toolbar, Typography, CircularProgress, Card, Stack } from "@mui/material";
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SendIcon from '@mui/icons-material/Send';
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -6,25 +6,23 @@ import React from "react";
 import { loadBunch, saveMessage, type Chat } from "../types/Chat.ts";
 import { useConnection } from "../hooks/useConnection.tsx";
 import type { Message } from "dongo-shared";
-import { createTranslator } from 'short-uuid';
 
-type MenuState = {
-  message: Message;
-  top: number;
-  left?: number;
-  right?: number;
-};
+import { AnimatePresence, motion } from 'framer-motion';
 
 const MessageItem = React.memo(
   ({
     message,
     style,
-    onContextMenu,
+    debugMessage,
+    setDebugMessage,
   }: {
     message: Message;
     style: 'me' | 'other';
-    onContextMenu: (message: Message, rect: DOMRect) => void;
+    debugMessage?: string;
+    setDebugMessage: React.Dispatch<React.SetStateAction<string | undefined>>;
   }) => {
+    const debugging = debugMessage === message.id;
+
     const ref = React.useRef<HTMLDivElement>(null);
 
     const handleContextMenu = (e: React.MouseEvent) => {
@@ -33,46 +31,98 @@ const MessageItem = React.memo(
       const rect = ref.current?.getBoundingClientRect();
       if (!rect) return;
 
-      onContextMenu(message, rect);
+      setDebugMessage(prev => {
+        if (prev === message.id) return undefined;
+        return message.id;
+      });
     };
 
     return (
       <Box
-        sx={{ display: 'flex', justifyContent: style === 'me' ? 'flex-end' : 'flex-start' }}
+        sx={{ display: 'flex', justifyContent: style === 'me' ? 'flex-end' : 'flex-start', bgcolor: 'transparent' }}
         onContextMenu={handleContextMenu}
       >
-        <Paper
-          ref={ref}
-          variant="outlined"
+        <Box
           sx={{
-            p: 2,
             maxWidth: '80%',
-            border: 0,
-            borderRadius: 1.25,
-            color: (theme) =>
-              style === 'me'
-                ? theme.palette.primary.contrastText
-                : theme.palette.secondary.contrastText,
-            bgcolor: (theme) =>
-              style === 'me'
-                ? theme.palette.primary.main
-                : theme.palette.secondary.main,
+            display: 'flex',
+            alignItems: 'flex-start',
+            flexDirection: style === 'me' ? 'row-reverse' : 'row',
+            width: 'fit-content',
+            bgcolor: 'transparent',
+            gap: 1,
           }}
         >
-          <Typography>{message.content}</Typography>
-        </Paper>
+          <Paper
+            ref={ref}
+            variant="outlined"
+            sx={{
+              p: 1.5,
+              color: (theme) =>
+                style === 'me'
+                  ? theme.palette.primary.contrastText
+                  : theme.palette.secondary.contrastText,
+              bgcolor: (theme) =>
+                style === 'me'
+                  ? theme.palette.primary.main
+                  : theme.palette.secondary.main,
+            }}
+          >
+            <Typography>{message.content}</Typography>
+          </Paper>
+
+          <AnimatePresence initial={false}>
+            {debugging && (
+              <motion.div
+                key={`msg-debug-${message.id}`}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                style={{ willChange: 'height, opacity', transform: 'translateZ(0)', transformOrigin: 'top', overflow: 'hidden' }}
+              >
+                <Card
+                  sx={{
+                    px: 1,
+                    py: 0.75,
+                    bgcolor: (theme) => theme.palette.background.surfaceVariant,
+                    color: (theme) => theme.palette.background.onSurfaceVariant,
+                  }}
+                >
+                  <Stack spacing={0.25}>
+                    {[
+                      ['Id', message.id],
+                      ['Sender', message.sender],
+                      ['Receiver', message.receiver],
+                      ['TimeStamp', message.timestamp],
+                    ].map(([label, value]) => (
+                      <Stack key={label} direction="row" spacing={1} sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography variant="caption" sx={{ opacity: 0.7, minWidth: 68 }}>
+                          {label}
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                          {value}
+                        </Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Box>
       </Box>
     );
   },
 );
-
 export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clearSelectedChat: () => void, me: string }) {
   const [message, setMessage] = useState<string>("");
+  const [debugMessage, setDebugMessage] = useState<string>();
+
   const [chatHistory, setChatHistory] = useState<Record<string, Message>>({});
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
   const { socket, conn, editChat } = useConnection();
-  const shortify = createTranslator()
 
   const currentBunchRef = useRef<number>(chat.lastBunch);
 
@@ -81,24 +131,11 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
   const isSendingRef = useRef<boolean>(false);
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  const [menuState, setMenuState] = useState<MenuState | null>(null);
-
-
-  const handleOpenMenu = useCallback((msg: Message, rect: DOMRect) => {
-    const width = 220;
-
-    setMenuState(
-      rect.right + width <= window.innerWidth
-        ? { message: msg, top: rect.top, left: rect.right + 8 }
-        : { message: msg, top: rect.top, right: window.innerWidth - rect.left + 8 },
-    );
-  }, []);
-
   useEffect(() => {
-    if (!menuState) return;
+    if (!debugMessage) return;
 
 
-    const closeMenu = () => setMenuState(null);
+    const closeMenu = () => setDebugMessage(undefined);
 
     const handlePointerDown = () => closeMenu();
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -111,7 +148,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [menuState]);
+  }, [debugMessage]);
 
   useEffect(() => {
     let isMounted = true;
@@ -274,7 +311,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
       <Box
         ref={containerRef}
-        onScroll={() => setMenuState(null)}
+        onScroll={() => setDebugMessage(undefined)}
         sx={{
           flexGrow: 1,
           minHeight: 0,
@@ -292,7 +329,8 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
             key={v.id}
             message={v}
             style={v.sender === conn?.user?.id ? 'me' : 'other'}
-            onContextMenu={handleOpenMenu}
+            debugMessage={debugMessage}
+            setDebugMessage={setDebugMessage}
           />
         ))}
 
@@ -302,50 +340,6 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
           </Box>
         )}
       </Box>
-
-      {/* Única instancia del menú contextual para todo el chat */}
-      {menuState && (
-        <Paper
-          elevation={6}
-          sx={{
-            position: 'fixed',
-            top: menuState.top,
-            left: menuState.left,
-            right: menuState.right,
-            p: 2,
-            zIndex: 1500,
-          }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>ID:</Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
-              {shortify.fromUUID(menuState.message.id)}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>Sender:</Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
-              {menuState.message.sender}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>Receiver:</Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
-              {menuState.message.receiver}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>Timestamp:</Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all' }}>
-              {menuState.message.timestamp}
-            </Typography>
-          </Box>
-
-
-        </Paper>
-      )}
 
       <Box
         sx={{
