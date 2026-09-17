@@ -8,7 +8,8 @@ import { useConnection } from "../hooks/useConnection.tsx";
 import type { Message } from "dongo-shared";
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { createTranslator } from 'short-uuid'
+import { generate, createTranslator } from 'short-uuid'
+
 
 const shortify = createTranslator();
 
@@ -146,7 +147,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
   const [chatHistory, setChatHistory] = useState<Record<string, Message>>({});
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
-  const { socket, conn, editChat } = useConnection();
+  const { socket, conn, editChat, sendMessage } = useConnection();
 
   const currentBunchRef = useRef<number>(chat.lastBunch);
 
@@ -174,46 +175,50 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
     };
   }, [debugMessage]);
 
+  // Efecto 1: cargar historial inicial cuando cambia el chat
   useEffect(() => {
     let isMounted = true;
 
-    const initChat = async () => {
+    const init = async () => {
       setLoading(true);
       currentBunchRef.current = chat.lastBunch;
 
       const bunch = await loadBunch(chat.uuid, chat.lastBunch);
-      if (isMounted) {
-        if (bunch && bunch.messages) {
-          setChatHistory(Object.fromEntries(bunch.messages.map(m => [m.id, m])));
-          setHasMore(chat.lastBunch > 0);
-        } else {
-          setChatHistory({});
-          setHasMore(false);
-        }
-        setLoading(false);
+      if (!isMounted) return;
 
-        editChat({ ...chat, pending: 0 })
+      if (bunch && bunch.messages) {
+        setChatHistory(Object.fromEntries(bunch.messages.map(m => [m.id, m])));
+        setHasMore(chat.lastBunch > 0);
+      } else {
+        setChatHistory({});
+        setHasMore(false);
       }
+      setLoading(false);
 
-      function handleMessage(msg: Message) {
-        if (msg.sender !== chat.name) return;
-
-        setChatHistory(prev => ({ [msg.id]: msg, ...prev }));
-
-        saveMessage(chat, msg)
-      }
-
-      socket?.on('inbox-message', handleMessage)
-
-      return () => { socket?.off('inbox-message', handleMessage) }
-    };
-
-    initChat();
+      editChat({ ...chat, pending: 0 });
+    }
+    init();
 
     return () => {
       isMounted = false;
     };
   }, [chat.uuid, chat.lastBunch]);
+
+  // Efecto 2: suscribirse a mensajes entrantes, con socket como dependencia real
+  useEffect(() => {
+    if (!socket) return;
+
+    function handleMessage(msg: Message) {
+      if (msg.sender !== chat.name) return;
+      setChatHistory(prev => ({ [msg.id]: msg, ...prev }));
+      saveMessage(chat, msg);
+    }
+
+    socket.on('inbox-message', handleMessage);
+    return () => {
+      socket.off('inbox-message', handleMessage);
+    };
+  }, [socket, chat.uuid, chat.name]);
 
   const loadMoreMessages = useCallback(async () => {
     if (loading || !hasMore || isSendingRef.current || currentBunchRef.current <= 0) return;
@@ -258,46 +263,40 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
 
   // TODO: mover el envío parcialmente al Provider
-  const handleSendMessage = async () => {
+  const messageRef = useRef(message);
+  useEffect(() => {
+    messageRef.current = message;
+  }, [message]);
 
+  const handleSendMessage = useCallback(async () => {
     inputRef.current?.focus();
 
     if (isSendingRef.current) return;
-    if (message.trim() === '') return;
+    if (messageRef.current.trim() === '') return;
 
     isSendingRef.current = true;
-    const prevmsg: Partial<Message> = {
+    const content = messageRef.current;
+    setMessage('');
+
+    const prevmsg: Message = {
+      id: generate(),
       sender: conn!.user!.name,
       receiver: chat.name,
       timestamp: Date.now(),
-      content: message,
+      content,
     };
 
+    try {
+      const msg = await sendMessage(chat, prevmsg);
+      setChatHistory((prev) => ({ [msg.id]: msg, ...prev }));
 
-    // TODO: Utilizar el mensaje devuelto por el servidor
-    setMessage('');
-
-    // TODO: Utilizar asíncrono, para ello utilizar mensajes temporales
-    const msg = await socket?.emitWithAck('send-message', prevmsg) as Message;
-    // TODO: modificación del chat en memoria tb
-    //
-
-    console.log('saving chat history', msg)
-
-    setChatHistory((prev) => ({ [msg.id]: msg, ...prev }));
-
-    saveMessage(chat, msg); // No esperar para mas fluidez
-
-    requestAnimationFrame(() => {
-      if (containerRef.current) {
-        containerRef.current.scrollTo({
-          top: 0,
-          behavior: 'smooth',
-        });
-      }
-    });
-    isSendingRef.current = false;
-  };
+      requestAnimationFrame(() => {
+        containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    } finally {
+      isSendingRef.current = false;
+    }
+  }, [chat, conn, sendMessage]);
 
   return (
     <Paper

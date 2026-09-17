@@ -2,7 +2,7 @@ import { createContext } from "react";
 import type { ConnectionSettings } from "../types/User";
 import type { Socket } from "socket.io-client";
 import type { Chat } from "../types/Chat";
-import type { User } from "dongo-shared";
+import type { Message, User } from "dongo-shared";
 
 export interface ConnectionContexType {
   ping: () => Promise<number>;
@@ -14,6 +14,7 @@ export interface ConnectionContexType {
   socket?: Socket;
   chats: Record<string, Chat>;
   editChat: (chat: Chat) => void;
+  sendMessage: (chat: Chat, message: Message) => Promise<Message>;
 }
 
 export const ConnectionContext = createContext<ConnectionContexType | undefined>(undefined);

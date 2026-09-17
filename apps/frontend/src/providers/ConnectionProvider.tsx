@@ -6,11 +6,13 @@ import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/
 import { type Message, type User } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
 
-export function ConnectionProvider({ children }: { children: ReactNode }) {
+export function ConnectionProvider({ children, selectedChat }: { children: ReactNode, selectedChat: Chat | "settings" | null }) {
   const [conn, setConn] = useState<ConnectionSettings>();
   const [socket, setSocket] = useState<Socket>();
   const [chats, setChats] = useState<Record<string, Chat>>({});
   const logger = useLog();
+
+  useEffect(() => logger.log(`Cambio SC ${selectedChat}`), [selectedChat, logger])
 
   const chatsRef = useRef(chats);
   useEffect(() => {
@@ -78,7 +80,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         ...currentChat,
         last: msg.content,
         lastTimestamp: Date.now(),
-        pending: (currentChat.pending ?? 0) + 1,
+        pending: (currentChat.pending ?? 0) + (!selectedChat ? 1 : 0),
       };
 
       const updatedChat = await saveMessage(chatToUpdate, {
@@ -113,7 +115,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         saveQueuesRef.current.delete(chatUuid);
       }
     }
-  }, [emitSafe]);
+  }, [emitSafe, selectedChat, logger]);
 
   useEffect(() => {
     if (!socket) return;
@@ -198,6 +200,21 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  const sendMessage = useCallback(async (chat: Chat, message: Message): Promise<Message> => {
+    if (!socketRef.current) {
+      logger.warn('Tried to send message with no active socket');
+      throw new Error('No active socket');
+    }
+
+    const msg = await socketRef.current.emitWithAck('send-message', message) as Message;
+
+    console.log('saving chat history', msg);
+    const updatedChat = await saveMessage(chat, msg);
+    setChats(prev => ({ ...prev, [updatedChat.uuid]: updatedChat }));
+
+    return msg;
+  }, [logger]);
+
   return (
     <ConnectionContext.Provider
       value={{
@@ -208,6 +225,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         chats,
         editChat,
         editUser,
+        sendMessage
       }}
     >
       {children}

@@ -153,7 +153,7 @@ export function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <LoggerProvider>
-        <ConnectionProvider>
+        <ConnectionProvider selectedChat={selectedChat}>
           {/* Usamos inset: 0 / 100% en lugar de 100vw/100vh para evitar re-calculos por la barra de tareas */}
           <Box sx={{ position: 'fixed', inset: 0, overflow: 'hidden', bgcolor: 'background.default' }}>
             <AnimatePresence initial={false}>
