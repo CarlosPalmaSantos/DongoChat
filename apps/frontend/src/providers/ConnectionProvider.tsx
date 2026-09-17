@@ -1,66 +1,57 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { loadConnectionSettings, saveConnectionSettings, type ConnectionSettings } from "../types/User";
+import { saveConnectionSettings, type ConnectionSettings } from "../types/User";
 import { io, Socket } from "socket.io-client";
 import { ConnectionContext } from "../contexts/ConnectionContext";
 import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/Chat";
 import { type Message, type User } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
 
-export function ConnectionProvider({ children, selectedChat }: { children: ReactNode, selectedChat: Chat | "settings" | null }) {
-  const [conn, setConn] = useState<ConnectionSettings>();
+export function ConnectionProvider({ children, selectedChat, conn, setConn }:
+  {
+    children: ReactNode,
+    selectedChat: Chat | "settings" | null,
+    conn: ConnectionSettings | undefined,
+    setConn: React.Dispatch<React.SetStateAction<ConnectionSettings | undefined>>
+  }) {
   const [socket, setSocket] = useState<Socket>();
   const [chats, setChats] = useState<Record<string, Chat>>({});
   const logger = useLog();
 
-  useEffect(() => logger.log(`Cambio SC ${selectedChat}`), [selectedChat, logger])
+  useEffect(() => logger.log(`Cambio SC ${selectedChat}`), [selectedChat, logger]);
 
   const chatsRef = useRef(chats);
   useEffect(() => {
     chatsRef.current = chats;
   }, [chats]);
 
-  // Ref "espejo" del socket: nos deja leer el socket vigente dentro de
-  // callbacks (como handleIncomingMessage) SIN que ese callback tenga que
-  // declarar `socket` como dependencia. Eso es lo que rompe el ciclo:
-  // el efecto que crea el socket ya no se re-dispara cada vez que el
-  // socket cambia.
   const socketRef = useRef<Socket | undefined>(undefined);
   useEffect(() => {
     socketRef.current = socket;
   }, [socket]);
 
-  // Punto único para emitir de forma segura sin repetir el chequeo de
-  // undefined en cada sitio que lo use.
   const emitSafe = useCallback((event: string, data: unknown) => {
     if (!socketRef.current) {
       logger.warn(`Tried to emit '${event}' with no active socket`);
       return;
     }
     socketRef.current.emit(event, data);
-  }, []);
+  }, [logger]);
 
-  // Igual para conn: lo usamos dentro de handleIncomingMessage sin que
-  // forme parte de sus dependencias (así handleIncomingMessage no cambia
-  // de identidad cada vez que conn se actualiza levemente).
   const connRef = useRef<ConnectionSettings | undefined>(undefined);
   useEffect(() => {
     connRef.current = conn;
   }, [conn]);
 
   useEffect(() => {
-    loadConnectionSettings().then(setConn);
     getAllChats().then(c => setChats(Object.fromEntries(c.map(c1 => ([c1.uuid, c1])))));
-  }, []);
+  }, [conn]);
 
   const saveQueuesRef = useRef<Map<string, Promise<void>>>(new Map());
 
-  // Identidad estable: no depende de `socket` ni de `conn`, así que nunca
-  // provoca que otros efectos se re-ejecuten por su culpa.
   const handleIncomingMessage = useCallback(async (msg: Message) => {
     logger.debug('incoming msg', msg);
 
     const chatUuid = msg.sender;
-
     const previousQueue = saveQueuesRef.current.get(chatUuid) ?? Promise.resolve();
 
     const currentQueue = previousQueue.then(async () => {
@@ -104,13 +95,11 @@ export function ConnectionProvider({ children, selectedChat }: { children: React
       emitSafe('ack-message', msg.id);
     });
 
-    // Guardamos la promesa actual como cola
     saveQueuesRef.current.set(chatUuid, currentQueue);
 
     try {
       await currentQueue;
     } finally {
-      // Solo eliminamos la cola si sigue siendo la última
       if (saveQueuesRef.current.get(chatUuid) === currentQueue) {
         saveQueuesRef.current.delete(chatUuid);
       }
@@ -121,7 +110,6 @@ export function ConnectionProvider({ children, selectedChat }: { children: React
     if (!socket) return;
 
     const currentSocket = socket;
-
     currentSocket.on('inbox-message', handleIncomingMessage);
 
     return () => {
@@ -129,9 +117,7 @@ export function ConnectionProvider({ children, selectedChat }: { children: React
     };
   }, [socket, handleIncomingMessage]);
 
-  // Este efecto ahora depende SOLO de `conn`. handleIncomingMessage tiene
-  // identidad estable (deps: []), así que ya no puede disparar un re-run
-  // de este efecto por sí sola.
+  // Manejo del ciclo de vida del Socket con eventos de conexión
   useEffect(() => {
     if (!conn) return;
 
@@ -142,28 +128,48 @@ export function ConnectionProvider({ children, selectedChat }: { children: React
 
     const activeSocket = io(conn.ip, {
       auth: conn.user,
+      timeout: 5000,
     });
 
+    // Evento 1: Conexión Exitosa
+    activeSocket.on('connect', () => {
+      logger.log(`Socket conectado con éxito. ID: ${activeSocket.id}`);
+      setSocket(activeSocket);
+    });
+
+    // Evento 2: Procesamiento del inbox inicial
     const onConnectedInbox = async (d: Record<string, Message>) => {
       logger.log('connected inbox', d);
-      // Procesamos en orden y esperamos cada guardado antes de mandar el
-      // ack, para no perder mensajes si la app vuelve a segundo plano
-      // justo después de recibir el inbox.
       for (const msg of Object.values(d)) {
         await handleIncomingMessage(msg);
       }
       activeSocket.emit('ack-connected-inbox');
-      setSocket(activeSocket);
     };
 
     activeSocket.on('connected-inbox', onConnectedInbox);
 
+    // Evento 3: Error de Conexión o Autenticación
+    activeSocket.on('connect_error', (err) => {
+      logger.warn(`Error de conexión socket: ${err.message}`);
+      activeSocket.disconnect();
+      setSocket(undefined);
+    });
+
+    // Evento 4: Desconexión del Servidor
+    activeSocket.on('disconnect', (reason) => {
+      logger.warn(`Socket desconectado: ${reason}`);
+      setSocket(undefined);
+    });
+
     return () => {
       activeSocket.off('connected-inbox', onConnectedInbox);
+      activeSocket.off('connect');
+      activeSocket.off('connect_error');
+      activeSocket.off('disconnect');
       activeSocket.disconnect();
       setSocket(undefined);
     };
-  }, [conn, handleIncomingMessage]);
+  }, [conn, handleIncomingMessage, logger]);
 
   function emit(event: string, data: unknown) {
     return new Promise((resolve) => {
@@ -208,7 +214,7 @@ export function ConnectionProvider({ children, selectedChat }: { children: React
 
     const msg = await socketRef.current.emitWithAck('send-message', message) as Message;
 
-    console.log('saving chat history', msg);
+    logger.log('saving chat history', msg);
     const updatedChat = await saveMessage(chat, msg);
     setChats(prev => ({ ...prev, [updatedChat.uuid]: updatedChat }));
 

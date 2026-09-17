@@ -1,26 +1,22 @@
-import { AppBar, Box, Button, Card, Dialog, FormControl, IconButton, InputLabel, MenuItem, Paper, Select, Snackbar, Stack, TextField, Toolbar, Typography } from "@mui/material";
+import { AppBar, Box, Button, Card, Dialog, FormControl, IconButton, InputLabel, MenuItem, Paper, Select, Snackbar, Stack, Toolbar, Typography } from "@mui/material";
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+
 import HelpIcon from '@mui/icons-material/Help';
-import { useConnection } from "../hooks/useConnection";
+import DeleteIcon from '@mui/icons-material/Delete'
+
 import { useEffect, useState } from "react";
 import { deleteAllChats } from "../types/Chat";
 import { useLog } from "../hooks/useLog";
 
 import { CapacitorUpdater } from "@capgo/capacitor-updater";
+import { deleteConnectionSettings } from "../types/User";
 
 
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
-  const { conn, editConn, editUser, ping } = useConnection();
   const [version, setVersion] = useState<string>()
 
-  const [ip, setIp] = useState<string | undefined>(conn?.ip);
-  const [name, setName] = useState<string>(conn?.user?.name ?? '');
-  const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
-
-  const [openPingSnackbar, setOpenPingSnackbar] = useState(false);
   const [error, setError] = useState<string | undefined>()
-  const [pingResult, setPingResult] = useState(-1);
 
   const logger = useLog();
   const [openLog, setOpenLog] = useState(false);
@@ -65,7 +61,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
       </Toolbar>
 
     </AppBar>
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4, p: 4, overflowY: 'auto' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 4, overflowY: 'auto' }}>
       <Box
         sx={{
           p: 4,
@@ -89,97 +85,30 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
           Connection
         </Typography>
 
-        <TextField
-          fullWidth
-          label="Name"
-          variant="outlined"
-          value={name}
-          onChange={e => setName(e.target.value.trim())}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2,
-            }
-          }} />
-        <TextField
-          fullWidth
-          label="Password"
-          variant="outlined"
-          type="password"
-          hidden={true}
-          value={pass}
-          onChange={e => setPass(e.target.value)}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2,
-            }
-          }} />
-        <TextField
-          fullWidth
-          label="IP Address"
-          variant="outlined"
-          type={'url'}
-          value={ip}
-          onChange={e => { setIp(e.target.value.trim()) }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2,
-            }
-          }} />
         <Button
           variant="contained"
-          color="primary"
           size="large"
-          startIcon={<HelpIcon />}
-          onClick={() => {
-
-            if (!ip || !name || !pass)
-              return
-
-            logger.log(`name: ${name}`)
-
-            if (ip !== conn?.ip) {
-              editConn({ ip })
-            }
-
-            editUser({
-              id: name,
-              name: name,
-              pass: pass
-            })
-
-            logger.log('timeouting')
-            setTimeout(() =>
-              ping().then(r => { setPingResult(r); if (r >= 0) setOpenPingSnackbar(true) }).catch(setError),
-              1000)
-          }}
-          sx={{ borderRadius: 1 }}
+          startIcon={<DeleteIcon />}
+          onClick={() => deleteAllChats()}
+          sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText, flexGrow: 1 }}
         >
-          Check Server
+          CHATS
         </Button>
-
         <Button
           variant="contained"
           size="large"
-          startIcon={<HelpIcon />}
-          onClick={() => {
-            deleteAllChats();
-          }}
-          sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText }}
+          startIcon={<DeleteIcon />}
+          onClick={() => deleteConnectionSettings()
+          }
+          sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText, flexGrow: 1 }}
         >
-          DELETE
+          USER
         </Button>
         <Snackbar
           open={!!error}
           autoHideDuration={4000}
           onClose={() => setError(undefined)}
           message={error}
-        />
-
-        <Snackbar
-          open={openPingSnackbar}
-          autoHideDuration={4000}
-          onClose={() => setOpenPingSnackbar(false)}
-          message={`Pong received in ${pingResult}ms`}
         />
       </Box>
       <Box
@@ -264,5 +193,5 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         {version}
       </Typography>
     </Box>
-  </Paper>
+  </Paper >
 }

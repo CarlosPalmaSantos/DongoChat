@@ -17,7 +17,7 @@ export const saveConnectionSettings = async (conn: ConnectionSettings): Promise<
     recursive: true,
   });
 };
-export const loadConnectionSettings = async (): Promise<ConnectionSettings> => {
+export const loadConnectionSettings = async (): Promise<ConnectionSettings | undefined> => {
   console.log('Saving')
   try {
     return JSON.parse((await Filesystem.readFile({
@@ -27,13 +27,18 @@ export const loadConnectionSettings = async (): Promise<ConnectionSettings> => {
     })).data.toString());
   }
   catch {
-    const res = {
-      name: '<NONAME>',
-      ip: 'wss://dongo.magin.top'
-    }
-
-    await saveConnectionSettings(res);
-
-    return res;
+    return undefined;
   }
 };
+
+export const deleteConnectionSettings = async (): Promise<void> => {
+  try {
+    await Filesystem.deleteFile({
+      path: "con.json",
+      directory: Directory.Data,
+    });
+  }
+  catch {
+    console.log('No file to delete')
+  }
+}

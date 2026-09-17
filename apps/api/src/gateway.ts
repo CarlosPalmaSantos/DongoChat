@@ -47,7 +47,11 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
         user: auth,
       };
     } else if (this.registeredUsers[auth.id].user.pass !== auth.pass) {
-      Logger.debug('1 > Client incorrect password');
+      Logger.debug('> Client incorrect password');
+      client.emit('connection-error', {
+        code: 'INVALID_CREDENTIALS',
+        message: 'Incorrect password for this user id',
+      });
       client.disconnect(true);
       return;
     }
@@ -63,6 +67,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     Logger.debug(JSON.stringify(Object.values(regUser.inbox)));
 
     client.emit('connected-inbox', regUser.inbox);
+    regUser.inbox = {};
   }
 
   handleDisconnect(client: Socket) {

@@ -5,29 +5,34 @@ import {
   CssBaseline,
   useMediaQuery,
   Box,
+  Card,
+  TextField,
+  Typography,
+  Button,
 } from '@mui/material';
 import { argbFromHex, themeFromSourceColor, hexFromArgb } from '@material/material-color-utilities';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { App as CapacitorApp } from '@capacitor/app';
-import { motion, AnimatePresence } from 'framer-motion';
 
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
-import ChatsPage from './pages/chats';
-import ChatPage from './pages/chat';
-import type { Chat } from './types/Chat';
-import SettingsPage from './pages/settings';
-import { ConnectionProvider } from './providers/ConnectionProvider';
-import { LoggerProvider } from './providers/LoggerProvider';
+import { DongoChat } from './DongoChat';
+import { loadConnectionSettings, type ConnectionSettings } from './types/User';
+
+import HelpIcon from '@mui/icons-material/Help';
+import { io } from 'socket.io-client';
 
 export function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
   const [sourceColor, setSourceColor] = useState('#8f9fe7');
+  const [conn, setConn] = useState<ConnectionSettings>();
 
-  const [selectedChat, setSelectedChat] = useState<Chat | 'settings' | null>(null);
+  const [ip, setIp] = useState<string | undefined>(conn?.ip);
+  const [name, setName] = useState<string>(conn?.user?.name ?? '');
+  const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
+
 
   interface DynamicColorPlugin {
     getSystemColor(): Promise<{ color: string }>;
@@ -99,6 +104,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    loadConnectionSettings().then(setConn);
+  }, []);
+
+  useEffect(() => {
     if (Capacitor.getPlatform() !== 'android') return;
 
     const setupStatusBar = async () => {
@@ -116,95 +125,148 @@ export function App() {
     setupStatusBar();
   }, [prefersDarkMode]);
 
-  useEffect(() => {
-    if (Capacitor.getPlatform() !== 'android') return;
-
-    const listenerPromise = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-      if (selectedChat) {
-        setSelectedChat(null);
-      } else if (canGoBack) {
-        window.history.back();
-      } else {
-        CapacitorApp.exitApp();
-      }
-    });
-
-    return () => {
-      listenerPromise.then((listener) => listener.remove());
-    };
-  }, [selectedChat]);
-
   // Estilos base para acelerar por GPU en WebView (Android/iOS)
-  const motionLayerStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    willChange: 'transform, opacity', // Obliga a usar capa de GPU dedicada
-    transform: 'translateZ(0)',      // Evita repintado en la CPU
-  };
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <LoggerProvider>
-        <ConnectionProvider selectedChat={selectedChat}>
-          {/* Usamos inset: 0 / 100% en lugar de 100vw/100vh para evitar re-calculos por la barra de tareas */}
-          <Box sx={{ position: 'fixed', inset: 0, overflow: 'hidden', bgcolor: 'background.default' }}>
-            <AnimatePresence initial={false}>
-              {!selectedChat &&
-                <motion.div
-                  key="chats-list"
-                  initial={{ opacity: 0.8, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0.8, scale: 0.96 }}
-                  transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                  style={motionLayerStyle}
-                >
-                  <ChatsPage onChatSelected={setSelectedChat} />
-                </motion.div>
-              }
-              {(!!selectedChat && selectedChat !== 'settings') &&
-                < motion.div
-                  key="chat-detail"
-                  initial={{ y: '100%' }}
-                  animate={{ y: '0%' }}
-                  exit={{ y: '100%' }}
-                  /* Transición suave tipo Android/iOS nativo optimizada por hardware */
-                  transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-                  style={{
-                    ...motionLayerStyle,
-                    zIndex: 10,
-                  }}
-                >
-                  <ChatPage chat={selectedChat} clearSelectedChat={() => setSelectedChat(null)} me="672cbaf7-6b4a-48b0-bb88-77ceaa6be877" />
-                </motion.div>
-              }
-              {(selectedChat === 'settings') &&
-                < motion.div
-                  key="chat-detail"
-                  initial={{ y: '100%' }}
-                  animate={{ y: '0%' }}
-                  exit={{ y: '100%' }}
-                  /* Transición suave tipo Android/iOS nativo optimizada por hardware */
-                  transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-                  style={{
-                    ...motionLayerStyle,
-                    zIndex: 10,
-                  }}
-                >
-                  <SettingsPage clearSelectedChat={() => setSelectedChat(null)} />
-                </motion.div>
-              }
-            </AnimatePresence>
-          </Box>
-        </ConnectionProvider>
-      </LoggerProvider>
+      {conn && <DongoChat conn={conn} setConn={setConn} />}
+      {!conn &&
+        <Box sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'fixed',
+          inset: 0,
+          overflow: 'hidden',
+          bgcolor: 'background.default',
+
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <Card sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            p: 4,
+            gap: 3,
+          }}>
+            <Typography variant='h4' sx={{ p: 2, color: theme => theme.palette.primary.main }}>Inicio</Typography>
+            <TextField
+              fullWidth
+              label="Name"
+              variant="outlined"
+              value={name}
+              onChange={e => setName(e.target.value.trim())}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                }
+              }} />
+            <TextField
+              fullWidth
+              label="Password"
+              variant="outlined"
+              type="password"
+              hidden={true}
+              value={pass}
+              onChange={e => setPass(e.target.value)}
+
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                }
+              }} />
+            <TextField
+              fullWidth
+              label="IP Address"
+              variant="outlined"
+              type={'url'}
+              value={ip}
+              onChange={e => { setIp(e.target.value.trim()) }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                }
+              }} />
+            <Box sx={{
+              display: 'flex',
+              justify: 'space-between',
+              alignItems: 'center',
+              gap: 1,
+              py: 2,
+              width: '100%',
+            }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                sx={{ borderRadius: 1, width: '100%' }}
+                onClick={() => {
+                  console.log(ip, name, pass)
+
+                  if (!ip || !name || !pass)
+                    return
+
+                  const user = {
+                    id: name,
+                    name: name,
+                    pass: pass
+                  }
+
+                  const socket = io(ip, {
+                    auth: user
+                  })
+
+                  const test = new Promise((resolve, reject) => {
+                    // Definimos las funciones con nombre para poder removerlas después
+                    const handleSuccess = (inboxData: unknown) => {
+                      cleanup();
+                      resolve(inboxData);
+                    };
+
+                    const handleError = (error: Error | string) => {
+                      cleanup();
+                      reject(error);
+                    };
+
+                    // Función auxiliar para desuscribir ambos eventos al terminar
+                    const cleanup = () => {
+                      socket.off('connected-inbox', handleSuccess);
+                      socket.off('connect_error', handleError);
+                      socket.off('connection-error', handleError); // Por si tu backend emite este evento custom
+                    };
+
+                    // Registrar los eventos
+                    socket.on('connected-inbox', handleSuccess);
+                    socket.on('connect_error', handleError);
+                    socket.on('connection-error', handleError);
+                  });
+
+                  test.then(() => {
+                    setConn(prev => ({
+                      ...prev, ip, user
+                    }))
+                  }).catch(() => console.log('Error'));
+                }}
+              >
+                Check Server
+              </Button>
+              <Box
+                sx={{
+                  color: theme => theme.palette.primary.main,
+                  alignSelf: 'stretch', // Estira el contenedor al alto total del flexbox
+                  aspectRatio: '1 / 1', // Garantiza que el ancho sea igual al alto
+                  height: 40,       // Permite que la altura sea dictada por la fila flex
+                  p: 0,                 // Elimina el padding si prefieres el icono al límite
+                  borderRadius: 1,      // Opcional: para que combine con el borderRadius del Button
+                }}
+              >
+                <HelpIcon sx={{ width: '100%', height: '100%' }} />
+              </Box>
+            </Box>
+
+          </Card>
+        </Box >
+      }
     </ThemeProvider >
   );
 }
