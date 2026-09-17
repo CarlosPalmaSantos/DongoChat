@@ -8,6 +8,9 @@ import { useConnection } from "../hooks/useConnection.tsx";
 import type { Message } from "dongo-shared";
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { createTranslator } from 'short-uuid'
+
+const shortify = createTranslator();
 
 const MessageItem = React.memo(
   ({
@@ -44,11 +47,10 @@ const MessageItem = React.memo(
       >
         <Box
           sx={{
-            maxWidth: '80%',
+            width: '100%',
             display: 'flex',
             alignItems: 'flex-start',
             flexDirection: style === 'me' ? 'row-reverse' : 'row',
-            width: 'fit-content',
             bgcolor: 'transparent',
             gap: 1,
           }}
@@ -57,6 +59,8 @@ const MessageItem = React.memo(
             ref={ref}
             variant="outlined"
             sx={{
+              display: 'flex',
+              maxWidth: '60%',
               p: 1.5,
               color: (theme) =>
                 style === 'me'
@@ -68,7 +72,16 @@ const MessageItem = React.memo(
                   : theme.palette.secondary.main,
             }}
           >
-            <Typography>{message.content}</Typography>
+            <Typography
+              sx={{
+                minWidth: 0,
+                overflowWrap: 'break-word',
+                wordBreak: 'break-word',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {message.content}
+            </Typography>
           </Paper>
 
           <AnimatePresence initial={false}>
@@ -91,16 +104,27 @@ const MessageItem = React.memo(
                 >
                   <Stack spacing={0.25}>
                     {[
-                      ['Id', message.id],
+                      ['Id', shortify.fromUUID(message.id)],
                       ['Sender', message.sender],
                       ['Receiver', message.receiver],
                       ['TimeStamp', message.timestamp],
                     ].map(([label, value]) => (
-                      <Stack key={label} direction="row" spacing={1} sx={{ whiteSpace: 'nowrap' }}>
-                        <Typography variant="caption" sx={{ opacity: 0.7, minWidth: 68 }}>
+                      <Stack key={label} direction="row" spacing={1}>
+                        <Typography
+                          variant="caption"
+                          sx={{ opacity: 0.7, minWidth: 68, flexShrink: 0 }}
+                        >
                           {label}
                         </Typography>
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontFamily: 'monospace',
+                            minWidth: 0,
+                            overflowWrap: 'break-word',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           {value}
                         </Typography>
                       </Stack>
