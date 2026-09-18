@@ -96,6 +96,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     const msg: Message = {
       ...data,
       id: v4(),
+      timestamp: Date.now(),
       sender,
     };
 
