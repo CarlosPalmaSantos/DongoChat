@@ -138,7 +138,13 @@ export function App() {
       pass: passArg,
     };
 
-    const socket = io(ipArg, { auth: user });
+    // transports: ['websocket'] evita el transporte de polling (basado en
+    // XHR) por completo. Con CapacitorHttp habilitado, ese polling puede
+    // fallar porque su patrón de petición "colgada" esperando datos no es
+    // compatible con el shim nativo de XHR que usa CapacitorHttp -- de ahí
+    // el "xhr poll error". WebSocket es una API distinta que no pasa por
+    // ese shim, así que se conecta directo sin ese problema.
+    const socket = io(ipArg, { auth: user, transports: ['websocket'] });
 
     const test = new Promise((resolve, reject) => {
       const handleSuccess = (inboxData: unknown) => {

@@ -177,6 +177,11 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+      // Evita el transporte de polling (XHR de larga duración), que con
+      // CapacitorHttp habilitado puede fallar y dar "xhr poll error" --
+      // ver App.tsx para la explicación completa. WebSocket no pasa por
+      // el shim de CapacitorHttp.
+      transports: ['websocket'],
     });
 
     // La instancia se registra una única vez al crearse; no se recrea

@@ -17,7 +17,15 @@ function getUser(client: Socket): User {
 }
 
 @WebSocketGateway({
-  cors: { origin: ['http://localhost:5173', 'https://dongochat.magin.top'] },
+  cors: {
+    origin: [
+      'http://localhost:5173', // dev con Vite
+      'https://dongochat.magin.top', // web en producción
+      'capacitor://localhost', // app nativa en iOS (iosScheme por defecto: 'capacitor')
+      'https://localhost', // app nativa en Android (androidScheme por defecto desde Capacitor 5: 'https')
+      'http://localhost', // fallback por si usas Capacitor < 5 o cambias androidScheme
+    ],
+  },
 })
 export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   conectedUsers: Record<string, Socket> = {};
