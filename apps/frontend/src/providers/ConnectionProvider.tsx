@@ -17,7 +17,21 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
   const [chats, setChats] = useState<Record<string, Chat>>({});
   const logger = useLog();
 
-  useEffect(() => logger.log(`Cambio SC ${selectedChat}`), [selectedChat, logger]);
+  // Ref estable para el logger: evita que efectos/callbacks dependan
+  // de una referencia de logger que puede cambiar en cada render.
+  const loggerRef = useRef(logger);
+  useEffect(() => {
+    loggerRef.current = logger;
+  }, [logger]);
+
+  useEffect(() => {
+    loggerRef.current.log(`Cambio SC ${selectedChat}`);
+  }, [selectedChat]);
+
+  const selectedChatRef = useRef(selectedChat);
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
 
   const chatsRef = useRef(chats);
   useEffect(() => {
@@ -31,11 +45,11 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
 
   const emitSafe = useCallback((event: string, data: unknown) => {
     if (!socketRef.current) {
-      logger.warn(`Tried to emit '${event}' with no active socket`);
+      loggerRef.current.warn(`Tried to emit '${event}' with no active socket`);
       return;
     }
     socketRef.current.emit(event, data);
-  }, [logger]);
+  }, []);
 
   const connRef = useRef<ConnectionSettings | undefined>(undefined);
   useEffect(() => {
@@ -49,7 +63,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
   const saveQueuesRef = useRef<Map<string, Promise<void>>>(new Map());
 
   const handleIncomingMessage = useCallback(async (msg: Message) => {
-    logger.debug('incoming msg', msg);
+    loggerRef.current.debug('incoming msg', msg);
 
     const chatUuid = msg.sender;
     const previousQueue = saveQueuesRef.current.get(chatUuid) ?? Promise.resolve();
@@ -71,7 +85,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
         ...currentChat,
         last: msg.content,
         lastTimestamp: Date.now(),
-        pending: (currentChat.pending ?? 0) + (!selectedChat ? 1 : 0),
+        pending: (currentChat.pending ?? 0) + (!selectedChatRef.current ? 1 : 0),
       };
 
       const updatedChat = await saveMessage(chatToUpdate, {
@@ -104,27 +118,35 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
         saveQueuesRef.current.delete(chatUuid);
       }
     }
-  }, [emitSafe, selectedChat, logger]);
+  }, [emitSafe]);
+
+  // Ref estable para handleIncomingMessage: evita que el efecto del socket
+  // se re-ejecute solo porque esta función cambió de referencia.
+  const handleIncomingMessageRef = useRef(handleIncomingMessage);
+  useEffect(() => {
+    handleIncomingMessageRef.current = handleIncomingMessage;
+  }, [handleIncomingMessage]);
 
   useEffect(() => {
     if (!socket) return;
 
     const currentSocket = socket;
-    currentSocket.on('inbox-message', handleIncomingMessage);
+    const listener = (msg: Message) => handleIncomingMessageRef.current(msg);
+    currentSocket.on('inbox-message', listener);
 
     return () => {
-      currentSocket.off('inbox-message', handleIncomingMessage);
+      currentSocket.off('inbox-message', listener);
     };
-  }, [socket, handleIncomingMessage]);
+  }, [socket]);
 
-  // Manejo del ciclo de vida del Socket con eventos de conexión
+  // Manejo del ciclo de vida del Socket con eventos de conexión.
+  // Depende SOLO de valores primitivos que identifican la conexión real,
+  // para que re-renders (cambio de selectedChat, logger, etc.) no la recreen.
   useEffect(() => {
-    if (!conn) return;
+    if (!conn?.ip || !conn?.user) return;
 
     saveConnectionSettings(conn);
-    logger.log('conn modified', conn);
-
-    if (!conn.ip || !conn.user) return;
+    loggerRef.current.log('conn modified', conn);
 
     const activeSocket = io(conn.ip, {
       auth: conn.user,
@@ -133,15 +155,15 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
 
     // Evento 1: Conexión Exitosa
     activeSocket.on('connect', () => {
-      logger.log(`Socket conectado con éxito. ID: ${activeSocket.id}`);
+      loggerRef.current.log(`Socket conectado con éxito. ID: ${activeSocket.id}`);
       setSocket(activeSocket);
     });
 
     // Evento 2: Procesamiento del inbox inicial
     const onConnectedInbox = async (d: Record<string, Message>) => {
-      logger.log('connected inbox', d);
+      loggerRef.current.log('connected inbox', d);
       for (const msg of Object.values(d)) {
-        await handleIncomingMessage(msg);
+        await handleIncomingMessageRef.current(msg);
       }
       activeSocket.emit('ack-connected-inbox');
     };
@@ -150,14 +172,14 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
 
     // Evento 3: Error de Conexión o Autenticación
     activeSocket.on('connect_error', (err) => {
-      logger.warn(`Error de conexión socket: ${err.message}`);
+      loggerRef.current.warn(`Error de conexión socket: ${err.message}`);
       activeSocket.disconnect();
       setSocket(undefined);
     });
 
     // Evento 4: Desconexión del Servidor
     activeSocket.on('disconnect', (reason) => {
-      logger.warn(`Socket desconectado: ${reason}`);
+      loggerRef.current.warn(`Socket desconectado: ${reason}`);
       setSocket(undefined);
     });
 
@@ -169,7 +191,8 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       activeSocket.disconnect();
       setSocket(undefined);
     };
-  }, [conn, handleIncomingMessage, logger]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conn?.ip, conn?.user?.name, conn?.user?.pass]);
 
   function emit(event: string, data: unknown) {
     return new Promise((resolve) => {
@@ -208,18 +231,18 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
 
   const sendMessage = useCallback(async (chat: Chat, message: Message): Promise<Message> => {
     if (!socketRef.current) {
-      logger.warn('Tried to send message with no active socket');
+      loggerRef.current.warn('Tried to send message with no active socket');
       throw new Error('No active socket');
     }
 
     const msg = await socketRef.current.emitWithAck('send-message', message) as Message;
 
-    logger.log('saving chat history', msg);
+    loggerRef.current.log('saving chat history', msg);
     const updatedChat = await saveMessage(chat, msg);
     setChats(prev => ({ ...prev, [updatedChat.uuid]: updatedChat }));
 
     return msg;
-  }, [logger]);
+  }, []);
 
   return (
     <ConnectionContext.Provider
