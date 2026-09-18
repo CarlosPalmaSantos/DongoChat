@@ -172,11 +172,15 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       // (interfaz reasociándose, DHCP/DNS asentándose, socket TCP previo
       // aún no liberado por el servidor...). Con más margen evitamos
       // timeouts "falsos" cuando el servidor en realidad sí está disponible.
-      timeout: 15000,
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+
+      reconnectionDelay: 250,
+      reconnectionDelayMax: 1500,
+      randomizationFactor: 0,
+
+      // No esperar 20 segundos para declarar fallido un intento
+      timeout: 5000,
       // Evita el transporte de polling (XHR de larga duración), que con
       // CapacitorHttp habilitado puede fallar y dar "xhr poll error" --
       // ver App.tsx para la explicación completa. WebSocket no pasa por
@@ -273,18 +277,6 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       activeSocket.connect();
     });
 
-    // Se dispara cuando la app vuelve a primer plano. En iOS/Android, al
-    // pasar a segundo plano el sistema puede suspender la ejecución de JS
-    // (los timers del backoff de socket.io dejan de correr) y/o matar la
-    // conexión TCP subyacente sin que el socket llegue a notificarlo. Al
-    // volver a primer plano forzamos un intento de reconexión inmediato en
-    // vez de esperar a que el propio socket lo detecte por su cuenta.
-    const appListenerPromise = CapacitorApp.addListener('resume', () => {
-      if (activeSocket.connected) return;
-      loggerRef.current.log('App reanudada, forzando reconexión');
-      activeSocket.connect();
-    });
-
     return () => {
       activeSocket.off('connected-inbox', onConnectedInbox);
       activeSocket.off('connect');
@@ -295,7 +287,6 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       activeSocket.io.off('reconnect_error');
       activeSocket.io.off('reconnect_failed');
       networkListenerPromise.then(listener => listener.remove());
-      appListenerPromise.then(listener => listener.remove());
       activeSocket.disconnect();
       setSocket(undefined);
       setStatus('idle');
