@@ -18,8 +18,6 @@ function getUser(client: Socket): User {
 
 @WebSocketGateway({
   cors: { origin: ['http://localhost:5173', 'https://dongochat.magin.top'] },
-  pingInterval: 20000,
-  pingTimeout: 5000,
 })
 export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   conectedUsers: Record<string, Socket> = {};

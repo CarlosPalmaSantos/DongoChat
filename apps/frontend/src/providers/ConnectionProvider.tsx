@@ -6,6 +6,8 @@ import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/
 import { type Message, type User } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
 import { Backdrop, CircularProgress } from "@mui/material";
+import { Network } from "@capacitor/network";
+import { App as CapacitorApp } from "@capacitor/app";
 
 export function ConnectionProvider({ children, selectedChat, conn, setConn }:
   {
@@ -166,7 +168,11 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
 
     const activeSocket = io(conn.ip, {
       auth: conn.user,
-      timeout: 5000,
+      // 5s se queda corto en el primer intento justo tras una caída de red
+      // (interfaz reasociándose, DHCP/DNS asentándose, socket TCP previo
+      // aún no liberado por el servidor...). Con más margen evitamos
+      // timeouts "falsos" cuando el servidor en realidad sí está disponible.
+      timeout: 15000,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -252,6 +258,28 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       }
     });
 
+    // Se dispara cuando Capacitor detecta (vía APIs nativas, no el WebView)
+    // que ha vuelto la conectividad de red. Es más fiable que el evento
+    // 'online' del navegador, que en iOS/WKWebView no siempre dispara.
+    const networkListenerPromise = Network.addListener('networkStatusChange', (status) => {
+      if (!status.connected) return;
+      if (activeSocket.connected) return;
+      loggerRef.current.log('Red disponible de nuevo (Capacitor Network), forzando reconexión');
+      activeSocket.connect();
+    });
+
+    // Se dispara cuando la app vuelve a primer plano. En iOS/Android, al
+    // pasar a segundo plano el sistema puede suspender la ejecución de JS
+    // (los timers del backoff de socket.io dejan de correr) y/o matar la
+    // conexión TCP subyacente sin que el socket llegue a notificarlo. Al
+    // volver a primer plano forzamos un intento de reconexión inmediato en
+    // vez de esperar a que el propio socket lo detecte por su cuenta.
+    const appListenerPromise = CapacitorApp.addListener('resume', () => {
+      if (activeSocket.connected) return;
+      loggerRef.current.log('App reanudada, forzando reconexión');
+      activeSocket.connect();
+    });
+
     return () => {
       activeSocket.off('connected-inbox', onConnectedInbox);
       activeSocket.off('connect');
@@ -261,6 +289,8 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       activeSocket.io.off('reconnect');
       activeSocket.io.off('reconnect_error');
       activeSocket.io.off('reconnect_failed');
+      networkListenerPromise.then(listener => listener.remove());
+      appListenerPromise.then(listener => listener.remove());
       activeSocket.disconnect();
       setSocket(undefined);
       setStatus('idle');

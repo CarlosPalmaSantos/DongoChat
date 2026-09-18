@@ -15,6 +15,7 @@
     "@capacitor/core": "^8.5.1",
     "@capacitor/device": "^8.0.3",
     "@capacitor/filesystem": "^8.1.3",
+    "@capacitor/network": "^8.0.1",
     "@capacitor/status-bar": "^8.0.3",
     "@capgo/capacitor-updater": "^8.51.16",
     "@emotion/react": "^11.14.0",
