@@ -7,7 +7,6 @@ import { type Message, type User } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
 import { Backdrop, CircularProgress } from "@mui/material";
 import { Network } from "@capacitor/network";
-import { App as CapacitorApp } from "@capacitor/app";
 
 export function ConnectionProvider({ children, selectedChat, conn, setConn }:
   {
