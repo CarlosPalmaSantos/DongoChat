@@ -106,11 +106,25 @@ export function App() {
     isCalledRef.current = true;
   }, []);
 
+  // Se pone a true en cuanto testConnection tiene éxito una vez. A partir
+  // de ahí, ConnectionProvider (montado más abajo vía <DongoChat>) es quien
+  // gestiona el ciclo de vida del socket "real" -- incluida su propia
+  // reconexión automática. Ya no necesitamos volver a "probar" la conexión
+  // con un socket aparte, y hacerlo sin este guard puede llegar a expulsar
+  // al socket principal si el servidor solo admite una conexión activa por
+  // usuario (mismo `auth` en ambos sockets).
+  const hasConnectedRef = useRef(false);
+
   const testConnection = useCallback((
     ipArg: string,
     nameArg: string,
     passArg: string,
   ) => {
+    if (hasConnectedRef.current) {
+      console.log('Ya hay una conexión activa; se ignora esta prueba de conexión');
+      return;
+    }
+
     if (!ipArg || !nameArg || !passArg) {
       setLoaddingCon(false); // <- antes faltaba esto: el spinner se quedaba colgado
       return;
@@ -148,13 +162,25 @@ export function App() {
       socket.on('connection-error', handleError);
     });
 
-    test.then(() => {
-      setConn(prev => ({ ...prev, ip: ipArg, user }));
-      setLoaddingCon(false);
-    }).catch(() => {
-      console.log('Error');
-      setLoaddingCon(false);
-    });
+    test
+      .then(() => {
+        hasConnectedRef.current = true;
+        setConn(prev => ({ ...prev, ip: ipArg, user }));
+        setLoaddingCon(false);
+      })
+      .catch(() => {
+        console.log('Error');
+        setLoaddingCon(false);
+      })
+      .finally(() => {
+        // Este socket solo sirve para validar credenciales/servidor antes
+        // de dar paso a la pantalla de chat. El socket "de verdad" lo crea
+        // ConnectionProvider a partir de `conn`, así que este siempre debe
+        // cerrarse aquí -- tanto si la prueba tuvo éxito como si falló.
+        // Dejarlo abierto era el bug real: se quedaba conectado
+        // indefinidamente con el mismo `auth` que el socket principal.
+        socket.disconnect();
+      });
   }, []);
 
   useEffect(() => {
