@@ -6,11 +6,10 @@ on:
       - 'v*.*.*' # Se activa al publicar tags como v1.0.0, v1.2.3, etc.
 
 jobs:
-  release-web:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
@@ -29,8 +28,10 @@ jobs:
         run: pnpm install
 
       - name: Actualizar versión en package.json del Frontend
+        id: version
         run: |
           VERSION=${GITHUB_REF_NAME#v}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Actualizando frontend a la versión $VERSION..."
           npm --prefix apps/frontend version $VERSION --no-git-tag-version
 
@@ -39,6 +40,27 @@ jobs:
 
       - name: Compilar Frontend
         run: pnpm --filter frontend build
+        env:
+          VITE_BASE_PATH: /
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+
+      - name: Subir dist como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: apps/frontend/dist
+
+  release-web:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Descargar dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: apps/frontend/dist
 
       - name: Comprimir ./dist del Frontend
         run: |
@@ -47,11 +69,10 @@ jobs:
 
       - name: Generar manifest.json
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
           CHECKSUM=$(sha256sum frontend-dist.zip | cut -d ' ' -f1)
           cat > manifest.json <<EOF
           {
-            "version": "$VERSION",
+            "version": "${{ needs.build.outputs.version }}",
             "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/frontend-dist.zip",
             "checksum": "$CHECKSUM"
           }
@@ -71,12 +92,45 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Descargar dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+
+      - name: Agregar CNAME para dominio propio
+        run: echo "www.dongo.magin.top" > dist/CNAME
+
+      - name: Fallback SPA (404.html) para rutas con history mode
+        run: cp dist/index.html dist/404.html
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir artifact de Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy a GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
   release-android:
-    needs: release-web
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
@@ -97,23 +151,17 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      # Cachea ~/.gradle y reduce llamadas repetidas a Maven Central
       - name: Configurar caché de Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Instalar dependencias
         run: pnpm install
 
-      - name: Actualizar versión en package.json del Frontend
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          npm --prefix apps/frontend version $VERSION --no-git-tag-version
-
-      - name: Compilar dongo-shared
-        run: pnpm --filter dongo-shared build
-
-      - name: Compilar Frontend
-        run: pnpm --filter frontend build
+      - name: Descargar dist ya compilado
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: apps/frontend/dist
 
       - name: Sincronizar Capacitor
         run: pnpm --filter frontend exec cap sync
