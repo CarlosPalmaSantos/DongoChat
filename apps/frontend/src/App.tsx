@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useRef } from 'react';
+import { useMemo, useEffect, useState, useRef, useCallback } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -9,6 +9,8 @@ import {
   TextField,
   Typography,
   Button,
+  Backdrop,
+  CircularProgress,
 } from '@mui/material';
 import { argbFromHex, themeFromSourceColor, hexFromArgb } from '@material/material-color-utilities';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -29,9 +31,12 @@ export function App() {
   const [sourceColor, setSourceColor] = useState('#8f9fe7');
   const [conn, setConn] = useState<ConnectionSettings>();
 
-  const [ip, setIp] = useState<string | undefined>(conn?.ip);
+  const [ip, setIp] = useState<string>(conn?.ip ?? 'wss://dongo.magin.top');
   const [name, setName] = useState<string>(conn?.user?.name ?? '');
   const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
+
+
+  const [loaddingCon, setLoaddingCon] = useState(true);
 
 
   interface DynamicColorPlugin {
@@ -103,9 +108,77 @@ export function App() {
     isCalledRef.current = true;
   }, []);
 
-  useEffect(() => {
-    loadConnectionSettings().then(setConn);
+  const testConnection = useCallback((
+    ipArg: string,
+    nameArg: string,
+    passArg: string,
+  ) => {
+    if (!ipArg || !nameArg || !passArg) {
+      setLoaddingCon(false); // <- antes faltaba esto: el spinner se quedaba colgado
+      return;
+    }
+
+    setLoaddingCon(true);
+
+    const user = {
+      id: nameArg,
+      name: nameArg,
+      pass: passArg,
+    };
+
+    const socket = io(ipArg, { auth: user });
+
+    const test = new Promise((resolve, reject) => {
+      const handleSuccess = (inboxData: unknown) => {
+        cleanup();
+        resolve(inboxData);
+      };
+
+      const handleError = (error: Error | string) => {
+        cleanup();
+        reject(error);
+      };
+
+      const cleanup = () => {
+        socket.off('connected-inbox', handleSuccess);
+        socket.off('connect_error', handleError);
+        socket.off('connection-error', handleError);
+      };
+
+      socket.on('connected-inbox', handleSuccess);
+      socket.on('connect_error', handleError);
+      socket.on('connection-error', handleError);
+    });
+
+    test.then(() => {
+      setConn(prev => ({ ...prev, ip: ipArg, user }));
+      setLoaddingCon(false);
+    }).catch(() => {
+      console.log('Error');
+      setLoaddingCon(false);
+    });
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadConnectionSettings().then(c => {
+      if (cancelled) return;
+
+      const loadedIp = c?.ip ?? 'wss://dongo.magin.top';
+      const loadedName = c?.user?.name ?? '';
+      const loadedPass = c?.user?.pass ?? '';
+
+      setIp(loadedIp);
+      setName(loadedName);
+      setPass(loadedPass);
+
+      testConnection(loadedIp, loadedName, loadedPass); // <- valores explícitos, no closure viejo
+    });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // <- solo al montar, ya no depende de testConnection
 
   useEffect(() => {
     if (Capacitor.getPlatform() !== 'android') return;
@@ -125,12 +198,14 @@ export function App() {
     setupStatusBar();
   }, [prefersDarkMode]);
 
+
   // Estilos base para acelerar por GPU en WebView (Android/iOS)
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+
       {conn && <DongoChat conn={conn} setConn={setConn} />}
-      {!conn &&
+      {(!conn && !loaddingCon) &&
         <Box sx={{
           display: 'flex',
           flexDirection: 'column',
@@ -149,7 +224,7 @@ export function App() {
             p: 4,
             gap: 3,
           }}>
-            <Typography variant='h4' sx={{ p: 2, color: theme => theme.palette.primary.main }}>Inicio</Typography>
+            <Typography variant='h4' sx={{ p: 2, color: theme => theme.palette.primary.main }}>DongoChat</Typography>
             <TextField
               fullWidth
               label="Name"
@@ -200,53 +275,7 @@ export function App() {
                 color="primary"
                 size="large"
                 sx={{ borderRadius: 1, width: '100%' }}
-                onClick={() => {
-                  console.log(ip, name, pass)
-
-                  if (!ip || !name || !pass)
-                    return
-
-                  const user = {
-                    id: name,
-                    name: name,
-                    pass: pass
-                  }
-
-                  const socket = io(ip, {
-                    auth: user
-                  })
-
-                  const test = new Promise((resolve, reject) => {
-                    // Definimos las funciones con nombre para poder removerlas después
-                    const handleSuccess = (inboxData: unknown) => {
-                      cleanup();
-                      resolve(inboxData);
-                    };
-
-                    const handleError = (error: Error | string) => {
-                      cleanup();
-                      reject(error);
-                    };
-
-                    // Función auxiliar para desuscribir ambos eventos al terminar
-                    const cleanup = () => {
-                      socket.off('connected-inbox', handleSuccess);
-                      socket.off('connect_error', handleError);
-                      socket.off('connection-error', handleError); // Por si tu backend emite este evento custom
-                    };
-
-                    // Registrar los eventos
-                    socket.on('connected-inbox', handleSuccess);
-                    socket.on('connect_error', handleError);
-                    socket.on('connection-error', handleError);
-                  });
-
-                  test.then(() => {
-                    setConn(prev => ({
-                      ...prev, ip, user
-                    }))
-                  }).catch(() => console.log('Error'));
-                }}
+                onClick={() => testConnection(ip, name, pass)}
               >
                 Check Server
               </Button>
@@ -267,6 +296,9 @@ export function App() {
           </Card>
         </Box >
       }
+      <Backdrop open={loaddingCon}>
+        <CircularProgress color='primary' />
+      </Backdrop>
     </ThemeProvider >
   );
 }
