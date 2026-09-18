@@ -17,7 +17,7 @@ function getUser(client: Socket): User {
 }
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: { origin: ['http://localhost:5173', 'https://dongochat.magin.top'] },
   pingInterval: 20000,
   pingTimeout: 5000,
 })
