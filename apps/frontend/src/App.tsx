@@ -35,9 +35,7 @@ export function App() {
   const [name, setName] = useState<string>(conn?.user?.name ?? '');
   const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
 
-
   const [loaddingCon, setLoaddingCon] = useState(true);
-
 
   interface DynamicColorPlugin {
     getSystemColor(): Promise<{ color: string }>;

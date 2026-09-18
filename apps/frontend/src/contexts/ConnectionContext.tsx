@@ -4,6 +4,13 @@ import type { Socket } from "socket.io-client";
 import type { Chat } from "../types/Chat";
 import type { Message, User } from "dongo-shared";
 
+export type ConnectionStatus =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnected';
+
 export interface ConnectionContexType {
   ping: () => Promise<number>;
 
@@ -12,6 +19,9 @@ export interface ConnectionContexType {
   editUser: (val: User) => void;
 
   socket?: Socket;
+  status: ConnectionStatus;
+  forceReconnect: () => void;
+
   chats: Record<string, Chat>;
   editChat: (chat: Chat) => void;
   sendMessage: (chat: Chat, message: Message) => Promise<Message>;
