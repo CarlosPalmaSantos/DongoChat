@@ -19,11 +19,14 @@ export namespace Id {
     if (flags.length > 0)
       res += '@'
 
-    for (const c of flags) {
-      res += c
-    }
 
-    res += ':'
+    if (flags.length > 0) {
+      for (const c of flags) {
+        res += c
+      }
+
+      res += ':'
+    }
 
     return res + value
   }

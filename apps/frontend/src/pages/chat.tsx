@@ -206,7 +206,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
     if (!socket) return;
 
     function handleMessage(msg: Message) {
-      if (msg.sender !== chat.name) return;
+      if (msg.sender !== chat.uuid) return;
       setChatHistory(prev => ({ [msg.id]: msg, ...prev }));
       saveMessage(chat, msg);
     }
@@ -215,7 +215,7 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
     return () => {
       socket.off('inbox-message', handleMessage);
     };
-  }, [socket, chat.uuid, chat.name]);
+  }, [socket, chat.uuid, chat.uuid]);
 
   const loadMoreMessages = useCallback(async () => {
     if (loading || !hasMore || isSendingRef.current || currentBunchRef.current <= 0) return;
