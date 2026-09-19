@@ -28,6 +28,9 @@ import { io } from 'socket.io-client';
 import { cleanText } from 'dongo-shared';
 
 import { PushNotifications } from '@capacitor/push-notifications'
+import { getWebPushToken, listenToWebPush, } from './firebase';
+
+const WEB_VAPID_KEY = 'BFo31hROQCoKCBwctHn1K_aKaMgphD2Esyi6l3MAmLsW_8sWFwa37haFTknWhFSIX9Tpv4Nzf8a6--I-OX3zMgI'
 
 export function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -44,7 +47,32 @@ export function App() {
   useEffect(() => {
     // Las notificaciones push solo se configuran en Android/iOS.
     if (!Capacitor.isNativePlatform()) {
-      return;
+      let unsubscribe: (() => void) | undefined;
+
+      async function initWebPush() {
+        try {
+          const token = await getWebPushToken(WEB_VAPID_KEY);
+
+          if (!token) {
+            console.warn('[Web Push] No se obtuvo token');
+            return;
+          }
+
+          console.log('[Web Push] Token:', token);
+
+          unsubscribe = await listenToWebPush(payload => {
+            console.log('[Web Push] ¡Notificación recibida!', payload);
+          });
+        } catch (error) {
+          console.error('[Web Push] Error inicializando:', error);
+        }
+      }
+
+      initWebPush();
+
+      return () => {
+        unsubscribe?.();
+      };
     }
 
     let cancelled = false;
