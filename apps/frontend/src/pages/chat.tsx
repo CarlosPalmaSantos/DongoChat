@@ -277,8 +277,8 @@ export default function ChatPage({ chat, clearSelectedChat }: { chat: Chat, clea
 
     const prevmsg: Message = {
       id: generate(),
-      sender: conn!.user!.name,
-      receiver: chat.name,
+      sender: conn!.user!.id,
+      receiver: chat.uuid,
       timestamp: Date.now(),
       content,
     };
