@@ -8,10 +8,7 @@ import { useConnection } from "../hooks/useConnection.tsx";
 import type { Message } from "dongo-shared";
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { generate, createTranslator } from 'short-uuid'
-
-
-const shortify = createTranslator();
+import { generate } from 'short-uuid'
 
 const MessageItem = React.memo(
   ({
@@ -105,7 +102,7 @@ const MessageItem = React.memo(
                 >
                   <Stack spacing={0.25}>
                     {[
-                      ['Id', shortify.fromUUID(message.id)],
+                      ['Id', message.id],
                       ['Sender', message.sender],
                       ['Receiver', message.receiver],
                       ['TimeStamp', message.timestamp],

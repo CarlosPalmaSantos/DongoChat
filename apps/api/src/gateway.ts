@@ -9,8 +9,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Socket, Server } from 'socket.io';
-import { v4 } from 'uuid';
-import { type Message, type User } from 'dongo-shared';
+import { type Message, type User, Id, cleanText } from 'dongo-shared';
 
 function getUser(client: Socket): User {
   return client.handshake.auth as User;
@@ -38,10 +37,12 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   server!: Server;
 
   getRegUser(u: User | Socket | string) {
-    if (typeof u === 'string') return this.registeredUsers[u];
-    if ('handshake' in u)
-      return this.registeredUsers[(u.handshake.auth as User).id];
-    return this.registeredUsers[u.id];
+    let id;
+    if (typeof u === 'string') id = u;
+    else if ('handshake' in u) id = (u.handshake.auth as User).id;
+    else id = u.id;
+
+    return this.registeredUsers[cleanText(id)];
   }
 
   async handleConnection(client: Socket) {
@@ -50,7 +51,10 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!(auth.id in this.registeredUsers)) {
       this.registeredUsers[auth.id] = {
         inbox: {},
-        user: auth,
+        user: {
+          ...auth,
+          id: auth.id,
+        },
       };
     } else if (this.registeredUsers[auth.id].user.pass !== auth.pass) {
       Logger.debug('> Client incorrect password');
@@ -97,11 +101,11 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleMsg(@MessageBody() data: Message, @ConnectedSocket() client: Socket) {
     Logger.debug(`> SEND ${JSON.stringify(data)} `);
     const sender = getUser(client).id;
-
     // TODO: Revisión de Timestamp
+
     const msg: Message = {
       ...data,
-      id: v4(),
+      id: Id.gen(),
       timestamp: Date.now(),
       sender,
     };

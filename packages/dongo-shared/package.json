@@ -7,8 +7,10 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
@@ -18,5 +20,8 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "short-uuid": "^6.0.3"
   }
 }

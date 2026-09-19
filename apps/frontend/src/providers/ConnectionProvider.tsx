@@ -3,7 +3,7 @@ import { saveConnectionSettings, type ConnectionSettings } from "../types/User";
 import { io, Socket } from "socket.io-client";
 import { ConnectionContext } from "../contexts/ConnectionContext";
 import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/Chat";
-import { type Message, type User } from "dongo-shared";
+import { type Message, type User, cleanText } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
 import { Backdrop, CircularProgress } from "@mui/material";
 import { Network } from "@capacitor/network";
@@ -81,7 +81,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       const prevChat = chatsRef.current[chatUuid];
 
       const currentChat: Chat = prevChat ?? {
-        uuid: chatUuid,
+        uuid: cleanText(chatUuid),
         name: chatUuid,
         last: '',
         lastTimestamp: Date.now(),

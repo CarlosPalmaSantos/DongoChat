@@ -25,6 +25,7 @@ import { loadConnectionSettings, type ConnectionSettings } from './types/User';
 
 import HelpIcon from '@mui/icons-material/Help';
 import { io } from 'socket.io-client';
+import { cleanText } from 'dongo-shared';
 
 export function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -133,7 +134,7 @@ export function App() {
     setLoaddingCon(true);
 
     const user = {
-      id: nameArg,
+      id: cleanText(nameArg),
       name: nameArg,
       pass: passArg,
     };
