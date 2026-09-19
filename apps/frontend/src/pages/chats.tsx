@@ -4,6 +4,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { type Chat } from "../types/Chat";
 import { useState } from "react";
 import { useConnection } from "../hooks/useConnection";
+import { cleanText } from "dongo-shared";
 
 interface ChatProps {
   chats: Chat[];
@@ -114,7 +115,7 @@ export default function ChatsPage({ onChatSelected }: ChatPageProps) {
                 if (!newUser || newUser in chats) return;
                 editChat({
                   name: newUser,
-                  uuid: newUser,
+                  uuid: cleanText(newUser),
                   last: '',
                   lastTimestamp: Date.now(),
                   bunchMaxSize: 20,
