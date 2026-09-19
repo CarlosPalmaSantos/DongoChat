@@ -163,6 +163,12 @@ jobs:
           name: frontend-dist
           path: apps/frontend/dist
 
+      - name: Crear google-services.json
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}
+        run: |
+          printf '%s' "$FIREBASE_GOOGLE_SERVICES_JSON" > apps/frontend/android/app/google-services.json
+
       - name: Sincronizar Capacitor
         run: pnpm --filter frontend exec cap sync
 
@@ -170,7 +176,6 @@ jobs:
         run: |
           cd apps/frontend/android
           chmod +x gradlew
-          # Reintentos ante 429/timeouts de Maven Central
           ./gradlew assembleDebug \
             -Dorg.gradle.internal.repository.max.tentatives=5 \
             -Dorg.gradle.internal.repository.initial.backoff=2000 \
