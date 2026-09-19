@@ -47,16 +47,17 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     const auth: User = getUser(client);
+    const aid = cleanText(auth.id);
 
-    if (!(auth.id in this.registeredUsers)) {
-      this.registeredUsers[auth.id] = {
+    if (!(aid in this.registeredUsers)) {
+      this.registeredUsers[aid] = {
         inbox: {},
         user: {
           ...auth,
-          id: auth.id,
+          id: aid,
         },
       };
-    } else if (this.registeredUsers[auth.id].user.pass !== auth.pass) {
+    } else if (this.registeredUsers[aid].user.pass !== auth.pass) {
       Logger.debug('> Client incorrect password');
       client.emit('connection-error', {
         code: 'INVALID_CREDENTIALS',
@@ -66,12 +67,21 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    Logger.debug(`> Client '${auth.id}' connected`);
-    this.conectedUsers[auth.id] = client;
+    Logger.debug(`> Client '${aid}' connected`);
+    this.conectedUsers[aid] = client;
 
-    await client.join(`inbox-${auth.id}`);
+    await client.join(`inbox-${aid}`);
 
     const regUser = this.getRegUser(auth);
+
+    if (!regUser) {
+      client.emit('connection-error', {
+        code: 'UNKNOWN_ERROR',
+        message: 'idk',
+      });
+      client.disconnect(true);
+      return;
+    }
 
     Logger.debug(`SENDING INBOX [${Object.keys(regUser.inbox).length}]`);
     Logger.debug(JSON.stringify(Object.values(regUser.inbox)));
