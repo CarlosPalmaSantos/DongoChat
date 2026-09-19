@@ -145,3 +145,4 @@ dist
 
 /.turbo/cache
 /apps/api/bundle
+/apps/frontend/android/app/google-services.json

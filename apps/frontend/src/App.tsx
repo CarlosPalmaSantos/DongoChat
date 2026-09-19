@@ -27,6 +27,8 @@ import HelpIcon from '@mui/icons-material/Help';
 import { io } from 'socket.io-client';
 import { cleanText } from 'dongo-shared';
 
+import { PushNotifications } from '@capacitor/push-notifications'
+
 export function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
   const [sourceColor, setSourceColor] = useState('#8f9fe7');
@@ -37,6 +39,115 @@ export function App() {
   const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
 
   const [loaddingCon, setLoaddingCon] = useState(true);
+
+
+  useEffect(() => {
+    // Las notificaciones push solo se configuran en Android/iOS.
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const setupPushNotifications = async () => {
+      try {
+        /*
+         * Registramos primero los listeners.
+         *
+         * Es importante hacerlo antes de llamar a register(), porque
+         * register() puede provocar inmediatamente el evento "registration".
+         */
+        const registrationListener =
+          await PushNotifications.addListener('registration', token => {
+            if (cancelled) return;
+
+            console.log('[Push] Token registrado:', token.value);
+
+            // TODO:
+            // En el siguiente paso enviaremos este token a nuestro backend.
+          });
+
+        const registrationErrorListener =
+          await PushNotifications.addListener('registrationError', error => {
+            if (cancelled) return;
+
+            console.error('[Push] Error de registro:', error);
+          });
+
+        const receivedListener =
+          await PushNotifications.addListener(
+            'pushNotificationReceived',
+            notification => {
+              if (cancelled) return;
+
+              console.log('[Push] Notificación recibida:', notification);
+            },
+          );
+
+        const actionListener =
+          await PushNotifications.addListener(
+            'pushNotificationActionPerformed',
+            action => {
+              if (cancelled) return;
+
+              console.log('[Push] Usuario pulsó la notificación:', action);
+            },
+          );
+
+        /*
+         * Comprobamos/pedimos permiso.
+         */
+        const permission = await PushNotifications.requestPermissions();
+
+        if (cancelled) return;
+
+        if (permission.receive !== 'granted') {
+          console.warn(
+            '[Push] Permiso de notificaciones no concedido:',
+            permission.receive,
+          );
+          return;
+        }
+
+        /*
+         * Una vez concedido el permiso, registramos el dispositivo.
+         *
+         * Esto provocará el evento "registration" de arriba cuando
+         * Capacitor obtenga el token nativo.
+         */
+        await PushNotifications.register();
+
+        /*
+         * Guardamos las referencias únicamente para que TypeScript/
+         * el cleanup quede explícito.
+         */
+        return () => {
+          registrationListener.remove();
+          registrationErrorListener.remove();
+          receivedListener.remove();
+          actionListener.remove();
+        };
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            '[Push] Error inicializando las notificaciones:',
+            error,
+          );
+        }
+      }
+    };
+
+    let cleanup: (() => void) | undefined;
+
+    setupPushNotifications().then(result => {
+      cleanup = result;
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
 
   interface DynamicColorPlugin {
     getSystemColor(): Promise<{ color: string }>;
