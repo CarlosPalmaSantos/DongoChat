@@ -94,7 +94,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
         ...currentChat,
         last: msg.content,
         lastTimestamp: Date.now(),
-        pending: (currentChat.pending ?? 0) + (!selectedChatRef.current ? 1 : 0),
+        pending: (currentChat.pending ?? 0) + ((!selectedChatRef.current || selectedChatRef.current !== msg.sender) ? 1 : 0),
       };
 
       const updatedChat = await saveMessage(chatToUpdate, {
