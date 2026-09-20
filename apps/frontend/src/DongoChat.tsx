@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ConnectionProvider } from "./providers/ConnectionProvider";
+import { ConnectionProvider, type ConnStatus } from "./providers/ConnectionProvider";
 import { LoggerProvider } from "./providers/LoggerProvider";
 import type { Chat } from "./types/Chat";
 import { Box } from "@mui/material";
@@ -11,9 +11,10 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from '@capacitor/app';
 import type { ConnectionSettings } from "./types/User";
 
-export function DongoChat({ conn, setConn }: {
+export function DongoChat({ conn, setConn, onChangeStatus }: {
   conn: ConnectionSettings | undefined,
   setConn: React.Dispatch<React.SetStateAction<ConnectionSettings | undefined>>
+  onChangeStatus: (status: ConnStatus) => void
 }) {
   const [selectedChat, setSelectedChat] = useState<Chat | 'settings' | null>(null);
 
@@ -52,7 +53,7 @@ export function DongoChat({ conn, setConn }: {
 
 
   return <LoggerProvider>
-    <ConnectionProvider selectedChat={selectedChat} conn={conn} setConn={setConn}>
+    <ConnectionProvider selectedChat={selectedChat} conn={conn} setConn={setConn} onChangeStatus={onChangeStatus}>
       {/* Usamos inset: 0 / 100% en lugar de 100vw/100vh para evitar re-calculos por la barra de tareas */}
       <Box sx={{ position: 'fixed', inset: 0, overflow: 'hidden', bgcolor: 'background.default' }}>
         <AnimatePresence initial={false}>

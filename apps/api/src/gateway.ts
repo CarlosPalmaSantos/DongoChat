@@ -10,6 +10,8 @@ import {
 } from '@nestjs/websockets';
 import { Socket, Server } from 'socket.io';
 import { type Message, type User, Id, cleanText } from 'dongo-shared';
+import { promises } from 'dns';
+import { timeout } from 'rxjs';
 
 function getUser(client: Socket): User {
   return client.handshake.auth as User;
@@ -49,6 +51,16 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     const auth: User = getUser(client);
     const aid = cleanText(auth.id);
 
+    if (auth.id === '' || auth.name === '' || auth.pass === '') {
+      Logger.debug('> Client empty password');
+      client.emit('connection-error', {
+        code: 'EMPTY_CREDENTIALS',
+        message: 'no valid values for credentials',
+      });
+      client.disconnect(true);
+      return;
+    }
+
     if (!(aid in this.registeredUsers)) {
       this.registeredUsers[aid] = {
         inbox: {},
@@ -59,6 +71,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
       };
     } else if (this.registeredUsers[aid].user.pass !== auth.pass) {
       Logger.debug('> Client incorrect password');
+
       client.emit('connection-error', {
         code: 'INVALID_CREDENTIALS',
         message: 'Incorrect password for this user id',

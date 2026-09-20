@@ -5,15 +5,16 @@ import { ConnectionContext } from "../contexts/ConnectionContext";
 import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/Chat";
 import { type Message, type User, cleanText } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
-import { Backdrop, CircularProgress } from "@mui/material";
 import { Network } from "@capacitor/network";
-
-export function ConnectionProvider({ children, selectedChat, conn, setConn }:
+export type ConnStatus =
+  'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'dead' | 'inboxed'
+export function ConnectionProvider({ children, selectedChat, conn, setConn, onChangeStatus }:
   {
     children: ReactNode,
     selectedChat: Chat | "settings" | null,
     conn: ConnectionSettings | undefined,
     setConn: React.Dispatch<React.SetStateAction<ConnectionSettings | undefined>>,
+    onChangeStatus: (status: ConnStatus) => void
   }) {
   const [socket, setSocket] = useState<Socket>();
   // Estado de conexión para la UI: permite distinguir "nunca conectado",
@@ -21,8 +22,15 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
   // reintentos en curso" (p.ej. mientras se agota reconnectionAttempts,
   // que aquí está puesto a Infinity, o justo antes del primer intento).
   const [status, setStatus] = useState<
-    'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
+    ConnStatus
   >('idle');
+
+  const statusRef = useRef(status);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   const [chats, setChats] = useState<Record<string, Chat>>({});
   const logger = useLog();
 
@@ -32,6 +40,8 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
   useEffect(() => {
     loggerRef.current = logger;
   }, [logger]);
+
+  useEffect(() => onChangeStatus(status), [status, onChangeStatus])
 
   useEffect(() => {
     loggerRef.current.log(`Cambio SC ${selectedChat}`);
@@ -160,7 +170,10 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
   // gestione sus propios reintentos (reconnection: true). El estado
   // `connected` solo se usa para reflejar el estado en la UI.
   useEffect(() => {
-    if (!conn?.ip || !conn?.user) return;
+    if (!conn?.ip || !conn?.user || conn.ip === '' || conn.user.id === '' || conn.user.name === '' || conn.user.pass === '') {
+      setStatus('dead')
+      return;
+    }
 
     saveConnectionSettings(conn);
     loggerRef.current.log('conn modified', conn);
@@ -235,14 +248,15 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
         await handleIncomingMessageRef.current(msg);
       }
       activeSocket.emit('ack-connected-inbox');
+      setStatus('inboxed')
     };
 
     activeSocket.on('connected-inbox', onConnectedInbox);
 
     // Evento 3: Error de Conexión o Autenticación
-    activeSocket.on('connect_error', (err) => {
+    activeSocket.on('connection-error', (err) => {
       loggerRef.current.warn(`Error de conexión socket: ${err.message}`);
-      setStatus('reconnecting');
+      setStatus('dead');
       // No se destruye ni recrea el socket aquí: socket.io-client ya
       // reintentará automáticamente según reconnection/reconnectionAttempts.
     });
@@ -250,6 +264,8 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
     // Evento 4: Desconexión
     activeSocket.on('disconnect', (reason) => {
       loggerRef.current.warn(`Socket desconectado: ${reason}`);
+
+      if (statusRef.current === 'dead') return
 
       if (reason === 'io server disconnect') {
         // El servidor cerró la conexión explícitamente: socket.io-client
@@ -369,9 +385,6 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn }:
       }}
     >
       {children}
-      <Backdrop open={!!socket && status !== 'connected'}>
-        <CircularProgress color='primary' />
-      </Backdrop>
     </ConnectionContext.Provider>
   );
 }

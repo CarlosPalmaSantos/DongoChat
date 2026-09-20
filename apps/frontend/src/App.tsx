@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useRef, useCallback } from 'react';
+import { useMemo, useEffect, useState, useRef } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -24,7 +24,6 @@ import { DongoChat } from './DongoChat';
 import { loadConnectionSettings, type ConnectionSettings } from './types/User';
 
 import HelpIcon from '@mui/icons-material/Help';
-import { io } from 'socket.io-client';
 import { cleanText } from 'dongo-shared';
 
 import { PushNotifications } from '@capacitor/push-notifications'
@@ -36,13 +35,11 @@ export function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
   const [sourceColor, setSourceColor] = useState('#8f9fe7');
   const [conn, setConn] = useState<ConnectionSettings>();
+  const [loadding, setLoadding] = useState(true)
 
   const [ip, setIp] = useState<string>(conn?.ip ?? 'wss://dongo.magin.top');
   const [name, setName] = useState<string>(conn?.user?.name ?? '');
   const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
-
-  const [loaddingCon, setLoaddingCon] = useState(true);
-
 
   useEffect(() => {
     // Las notificaciones push solo se configuran en Android/iOS.
@@ -253,81 +250,6 @@ export function App() {
   // con un socket aparte, y hacerlo sin este guard puede llegar a expulsar
   // al socket principal si el servidor solo admite una conexión activa por
   // usuario (mismo `auth` en ambos sockets).
-  const hasConnectedRef = useRef(false);
-
-  const testConnection = useCallback((
-    ipArg: string,
-    nameArg: string,
-    passArg: string,
-  ) => {
-    if (hasConnectedRef.current) {
-      console.log('Ya hay una conexión activa; se ignora esta prueba de conexión');
-      return;
-    }
-
-    if (!ipArg || !nameArg || !passArg) {
-      setLoaddingCon(false); // <- antes faltaba esto: el spinner se quedaba colgado
-      return;
-    }
-
-    setLoaddingCon(true);
-
-    const user = {
-      id: cleanText(nameArg),
-      name: nameArg,
-      pass: passArg,
-    };
-
-    // transports: ['websocket'] evita el transporte de polling (basado en
-    // XHR) por completo. Con CapacitorHttp habilitado, ese polling puede
-    // fallar porque su patrón de petición "colgada" esperando datos no es
-    // compatible con el shim nativo de XHR que usa CapacitorHttp -- de ahí
-    // el "xhr poll error". WebSocket es una API distinta que no pasa por
-    // ese shim, así que se conecta directo sin ese problema.
-    const socket = io(ipArg, { auth: user, transports: ['websocket'] });
-
-    const test = new Promise((resolve, reject) => {
-      const handleSuccess = (inboxData: unknown) => {
-        cleanup();
-        resolve(inboxData);
-      };
-
-      const handleError = (error: Error | string) => {
-        cleanup();
-        reject(error);
-      };
-
-      const cleanup = () => {
-        socket.off('connected-inbox', handleSuccess);
-        socket.off('connect_error', handleError);
-        socket.off('connection-error', handleError);
-      };
-
-      socket.on('connected-inbox', handleSuccess);
-      socket.on('connect_error', handleError);
-      socket.on('connection-error', handleError);
-    });
-
-    test
-      .then(() => {
-        hasConnectedRef.current = true;
-        setConn(prev => ({ ...prev, ip: ipArg, user }));
-        setLoaddingCon(false);
-      })
-      .catch(() => {
-        console.log('Error');
-        setLoaddingCon(false);
-      })
-      .finally(() => {
-        // Este socket solo sirve para validar credenciales/servidor antes
-        // de dar paso a la pantalla de chat. El socket "de verdad" lo crea
-        // ConnectionProvider a partir de `conn`, así que este siempre debe
-        // cerrarse aquí -- tanto si la prueba tuvo éxito como si falló.
-        // Dejarlo abierto era el bug real: se quedaba conectado
-        // indefinidamente con el mismo `auth` que el socket principal.
-        socket.disconnect();
-      });
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -343,11 +265,22 @@ export function App() {
       setName(loadedName);
       setPass(loadedPass);
 
-      testConnection(loadedIp, loadedName, loadedPass); // <- valores explícitos, no closure viejo
+      setLoadding(false)
+
+      if (loadedIp === '' || loadedName === '' || loadedPass === '')
+        return
+
+      setConn({
+        ip: loadedIp, user: {
+          id: cleanText(loadedName),
+          name: loadedName,
+          pass: loadedPass
+        }
+      })
     });
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []); // <- solo al montar, ya no depende de testConnection
 
   useEffect(() => {
@@ -368,14 +301,22 @@ export function App() {
     setupStatusBar();
   }, [prefersDarkMode]);
 
-
   // Estilos base para acelerar por GPU en WebView (Android/iOS)
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
 
-      {conn && <DongoChat conn={conn} setConn={setConn} />}
-      {(!conn && !loaddingCon) &&
+      {(conn) && <DongoChat conn={conn} setConn={setConn} onChangeStatus={(status) => {
+        console.log('status changed:', status)
+        switch (status) {
+          case 'idle': setLoadding(true); break;
+          case 'connecting': setLoadding(true); break;
+          case 'disconnected': setLoadding(true); break;
+          case 'dead': setConn(undefined); setLoadding(false); break;
+          case 'inboxed': setLoadding(false); break;
+        }
+      }} />}
+      {(!loadding && !conn) &&
         <Box sx={{
           display: 'flex',
           flexDirection: 'column',
@@ -445,7 +386,13 @@ export function App() {
                 color="primary"
                 size="large"
                 sx={{ borderRadius: 1, width: '100%' }}
-                onClick={() => testConnection(ip, name, pass)}
+                onClick={() => setConn({
+                  ip, user: {
+                    id: cleanText(name),
+                    name,
+                    pass
+                  }
+                })}
               >
                 Check Server
               </Button>
@@ -466,9 +413,8 @@ export function App() {
           </Card>
         </Box >
       }
-      <Backdrop open={loaddingCon}>
-        <CircularProgress color='primary' />
-      </Backdrop>
+
+      <Backdrop open={loadding}><CircularProgress color='primary' /></Backdrop>
     </ThemeProvider >
   );
 }
