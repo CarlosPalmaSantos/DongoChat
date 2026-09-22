@@ -9,12 +9,28 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Socket, Server } from 'socket.io';
-import { type Message, type User, Id, cleanText } from 'dongo-shared';
-import { promises } from 'dns';
-import { timeout } from 'rxjs';
+import {
+  type Message,
+  type User,
+  Id,
+  ParseUser,
+  cleanText,
+} from 'dongo-shared';
+import { AppService, UserEntry } from './app.service';
+import crypto, { createHash } from 'crypto';
 
-function getUser(client: Socket): User {
-  return client.handshake.auth as User;
+type ConnectionErrorCode = 'INVALID_VALUE' | 'TEMPORAL_USER';
+
+class ConnectionError extends Error {
+  constructor(
+    message: string,
+    public code: ConnectionErrorCode,
+  ) {
+    super(message); // Call the constructor of the base class `Error`
+    this.name = 'ConnectionError'; // Set the error name to your custom error class name
+    // Set the prototype explicitly to maintain the correct prototype chain
+    Object.setPrototypeOf(this, ConnectionError.prototype);
+  }
 }
 
 @WebSocketGateway({
@@ -29,139 +45,201 @@ function getUser(client: Socket): User {
   },
 })
 export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
+  constructor(private readonly appService: AppService) { }
   conectedUsers: Record<string, Socket> = {};
-  registeredUsers: Record<
-    string,
-    { inbox: Record<string, Message>; user: User }
-  > = {};
 
   @WebSocketServer()
   server!: Server;
 
-  getRegUser(u: User | Socket | string) {
-    let id;
-    if (typeof u === 'string') id = u;
-    else if ('handshake' in u) id = (u.handshake.auth as User).id;
-    else id = u.id;
+  async registerUser(client: Socket, user: User) {
+    Logger.log(`Registering ${user.id}`);
+    const res = (await client.emitWithAck('req_puk')) as unknown;
 
-    return this.registeredUsers[cleanText(id)];
+    if (typeof res !== 'string')
+      throw new ConnectionError(
+        'The PuK request got an invalid response',
+        'INVALID_VALUE',
+      );
+
+    const newUser = new UserEntry(
+      {},
+      {
+        id: createHash('sha256').update(res).digest('base64'),
+        name: user.name,
+      },
+      res,
+    );
+
+    this.appService.saveUser(newUser);
+    return newUser;
+  }
+
+  async loginUser(client: Socket, user: UserEntry) {
+    Logger.log(`Login ${user.user.id}`);
+
+    const validation = crypto.randomBytes(64);
+    Logger.debug(`Validation: ${validation.toString('base64')}`);
+    Logger.debug(user);
+
+    const encryptedValidation = crypto
+      .publicEncrypt(
+        {
+          key: user.puk,
+          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: 'sha256',
+        },
+        validation,
+      )
+      .toString('base64');
+
+    const res: unknown = await client.emitWithAck(
+      'test_puk',
+      encryptedValidation,
+    );
+
+    if (typeof res !== 'string' || res !== validation.toString('base64'))
+      throw new ConnectionError(
+        'Invalid response to the PuK test',
+        'INVALID_VALUE',
+      );
+
+    Logger.debug(`Validation Response: ${res}`);
   }
 
   async handleConnection(client: Socket) {
-    const auth: User = getUser(client);
-    const aid = cleanText(auth.id);
+    try {
+      const auth = ParseUser(client.handshake.auth);
+      Logger.log(`Connecting ${JSON.stringify(client.handshake.auth)}`);
 
-    if (auth.id === '' || auth.name === '' || auth.pass === '') {
-      Logger.debug('> Client empty password');
-      client.emit('connection-error', {
-        code: 'EMPTY_CREDENTIALS',
-        message: 'no valid values for credentials',
-      });
-      client.disconnect(true);
-      return;
+      if (!auth || auth.id === '' || auth.name === '') {
+        throw new ConnectionError('Invalid credentials', 'INVALID_VALUE');
+      }
+
+      let user = this.appService.searchUser(auth.id);
+      Logger.log(user);
+
+      if (!user) {
+        user = await this.registerUser(client, auth);
+      }
+
+      if (!(user instanceof UserEntry))
+        throw new ConnectionError(
+          'The user is already registering',
+          'TEMPORAL_USER',
+        );
+
+      await this.loginUser(client, user);
+
+      this.conectedUsers[auth.id] = client;
+
+      await client.join(`inbox-${auth.id}`);
+
+      Logger.debug(`SENDING INBOX [${Object.keys(user.inbox).length}]`);
+
+      client
+        .emitWithAck('connected-inbox', user.inbox)
+        .then((_) => {
+          user.inbox = {};
+        })
+        .catch(() => { });
+
+      user.inbox = {};
+    } catch (e: unknown) {
+      if (e instanceof ConnectionError) {
+        Logger.error(e);
+        client.emit('ronnection-error', {
+          message: e.message,
+          code: e.code,
+        });
+      } else if (e instanceof Error) {
+        client.emit('ronnection-error', {
+          message: e.message,
+          code: 'UNOWN_ERROR',
+        });
+      }
     }
-
-    if (!(aid in this.registeredUsers)) {
-      this.registeredUsers[aid] = {
-        inbox: {},
-        user: {
-          ...auth,
-          id: aid,
-        },
-      };
-    } else if (this.registeredUsers[aid].user.pass !== auth.pass) {
-      Logger.debug('> Client incorrect password');
-
-      client.emit('connection-error', {
-        code: 'INVALID_CREDENTIALS',
-        message: 'Incorrect password for this user id',
-      });
-      client.disconnect(true);
-      return;
-    }
-
-    Logger.debug(`> Client '${aid}' connected`);
-    this.conectedUsers[aid] = client;
-
-    await client.join(`inbox-${aid}`);
-
-    const regUser = this.getRegUser(auth);
-
-    if (!regUser) {
-      client.emit('connection-error', {
-        code: 'UNKNOWN_ERROR',
-        message: 'idk',
-      });
-      client.disconnect(true);
-      return;
-    }
-
-    Logger.debug(`SENDING INBOX [${Object.keys(regUser.inbox).length}]`);
-    Logger.debug(JSON.stringify(Object.values(regUser.inbox)));
-
-    client.emit('connected-inbox', regUser.inbox);
-    regUser.inbox = {};
   }
 
   handleDisconnect(client: Socket) {
-    const auth = getUser(client);
+    const auth = ParseUser(client.handshake.auth);
+
+    // TODO: Investigar si lanzar excepción
+    if (!auth) return;
+
     delete this.conectedUsers[auth.id];
 
     Logger.debug(`> Client '${auth.name}' disconnected`);
   }
 
-  @SubscribeMessage('ping')
-  handlePing(
-    @MessageBody() data: any,
-    @ConnectedSocket() client: Socket,
-  ): string {
-    const auth = getUser(client);
-    Logger.debug(`> PING FROM ${auth.id} `);
-    return 'pong';
+  @SubscribeMessage('list-user')
+  handleListUser(@MessageBody() input: string) {
+    // TODO: Agregar mínimo de 3 dígitos
+    return this.appService.listUser(input);
+  }
+
+  @SubscribeMessage('get-user')
+  handleGetUser(@MessageBody() id: string) {
+    // TODO: Agregar mínimo de 3 dígitos
+
+    Logger.log('GetUser');
+    return this.appService.searchUser(id, false);
   }
 
   @SubscribeMessage('send-message')
   handleMsg(@MessageBody() data: Message, @ConnectedSocket() client: Socket) {
-    Logger.debug(`> SEND ${JSON.stringify(data)} `);
-    const sender = getUser(client).id;
-    // TODO: Revisión de Timestamp
+    try {
+      const auth = ParseUser(client.handshake.auth);
 
-    const msg: Message = {
-      ...data,
-      id: Id.gen(),
-      timestamp: Date.now(),
-      sender,
-    };
+      console.log(data);
+      console.log(client.handshake.auth);
 
-    // TODO: Revisión existencia de receiver
-    const receiver = this.getRegUser(msg.receiver);
-    if (!receiver) throw new Error('Inexistent Receiver');
+      // TODO: Investigar si lanzar excepción
+      if (!auth) return;
 
-    receiver.inbox[msg.id] = msg;
-    this.server.to(`inbox-${data.receiver}`).emit('inbox-message', msg);
+      const sender = this.appService.searchUser(auth.id);
+      const receiver = this.appService.searchUser(data.receiver);
 
-    return msg;
-  }
+      Logger.log('Sending message');
+      console.log(data.receiver);
 
-  @SubscribeMessage('ack-message')
-  handleAck(@MessageBody() msgId: string, @ConnectedSocket() client: Socket) {
-    const auth = getUser(client);
-    const regUser = this.getRegUser(auth.id);
+      if (!sender || sender === 'temp')
+        throw new ConnectionError('User is temporal user', 'TEMPORAL_USER');
 
-    if (regUser && regUser.inbox[msgId]) {
-      delete regUser.inbox[msgId];
-      Logger.debug(`< ACK received for ${msgId}. Message removed from inbox.`);
-    }
-  }
+      if (!receiver || receiver === 'temp')
+        throw new ConnectionError('Receiver is temporal user', 'TEMPORAL_USER');
 
-  @SubscribeMessage('ack-connected-inbox')
-  handleAckInbox(@ConnectedSocket() client: Socket) {
-    const auth = getUser(client);
-    const regUser = this.getRegUser(auth.id);
+      const msg: Message & { senderInfo: User } = {
+        id: Id.gen(),
+        timestamp: Date.now(),
+        sender: sender.user.id,
+        receiver: receiver.user.id,
+        senderInfo: sender.user,
+        content: data.content,
+      };
 
-    if (regUser) {
-      regUser.inbox = {};
-      Logger.debug(`< Cleared inbox for connected user ${auth.id}`);
+      receiver.inbox[msg.id] = msg;
+      this.server
+        .to(`inbox-${receiver.user.id}`)
+        .emitWithAck('inbox-message', msg)
+        .then((_) => {
+          delete receiver.inbox[msg.id];
+        })
+        .catch(() => { });
+
+      return msg;
+    } catch (e: unknown) {
+      Logger.error(e);
+      if (e instanceof ConnectionError) {
+        client.emit('ronnection-error', {
+          message: e.message,
+          code: e.code,
+        });
+      } else if (e instanceof Error) {
+        client.emit('ronnection-error', {
+          message: e.message,
+          code: 'UNOWN_ERROR',
+        });
+      }
     }
   }
 }

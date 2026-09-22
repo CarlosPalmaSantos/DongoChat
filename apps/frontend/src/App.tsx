@@ -25,7 +25,6 @@ import { DongoChat } from './DongoChat';
 import { loadConnectionSettings, type ConnectionSettings } from './types/User';
 
 import HelpIcon from '@mui/icons-material/Help';
-import { cleanText } from 'dongo-shared';
 
 import { PushNotifications } from '@capacitor/push-notifications'
 import { getWebPushToken, listenToWebPush, } from './firebase';

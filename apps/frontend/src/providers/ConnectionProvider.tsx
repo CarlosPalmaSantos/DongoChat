@@ -3,7 +3,7 @@ import { saveConnectionSettings, type ConnectionSettings } from "../types/User";
 import { io, Socket } from "socket.io-client";
 import { ConnectionContext } from "../contexts/ConnectionContext";
 import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/Chat";
-import { type Message, type User, cleanText, toUpperCamelCase } from "dongo-shared";
+import { type Message, type User, toUpperCamelCase } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
 import { Network } from "@capacitor/network";
 import { decryptWithStoredKey, bytesToBase64 } from "../types/keys";
@@ -157,7 +157,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
     if (!socket) return;
 
     const currentSocket = socket;
-    const listener = (msg: Message) => handleIncomingMessageRef.current(msg);
+    const listener = (msg: Message & { senderInfo: User; }) => handleIncomingMessageRef.current(msg);
     currentSocket.on('inbox-message', listener);
 
     return () => {
@@ -232,7 +232,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       setStatus({ type: 'disconnected', error: 'Server connection failed' });
     });
 
-    const onConnectedInbox = async (d: Record<string, Message>) => {
+    const onConnectedInbox = async (d: Record<string, Message & { senderInfo: User }>) => {
       loggerRef.current.log('connected inbox', d);
       for (const msg of Object.values(d)) {
         await handleIncomingMessageRef.current(msg);
