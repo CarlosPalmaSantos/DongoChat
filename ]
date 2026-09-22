@@ -146,7 +146,7 @@ export default function ChatsPage({ onChatSelected }: ChatPageProps) {
                       p: 1,                 // Elimina el padding si prefieres el icono al límite
                     }}
 
-                    onClick={async () => {
+                    onClick={() => {
                       await editChat({
                         uuid: u.id,
                         name: u.name,

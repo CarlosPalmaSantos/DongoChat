@@ -17,7 +17,6 @@ export function DongoChat({ conn, setConn, onChangeStatus }: {
   onChangeStatus: (status: ConnStatus) => void
 }) {
   const [selectedChat, setSelectedChat] = useState<Chat | 'settings' | null>(null);
-
   const motionLayerStyle: React.CSSProperties = {
     position: 'absolute',
     top: 0,

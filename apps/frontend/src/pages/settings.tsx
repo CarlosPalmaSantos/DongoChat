@@ -11,6 +11,7 @@ import { useLog } from "../hooks/useLog";
 
 import { CapacitorUpdater } from "@capgo/capacitor-updater";
 import { deleteConnectionSettings } from "../types/User";
+import { useConnection } from "../hooks/useConnection";
 
 
 export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat: () => void }) {
@@ -20,6 +21,7 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
 
   const logger = useLog();
   const [openLog, setOpenLog] = useState(false);
+  const { conn } = useConnection()
 
   useEffect(() => {
     async function getBundleVersion() {
@@ -84,7 +86,10 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
         >
           Connection
         </Typography>
-
+        <Box>
+          <Typography variant="body1" color="primary" sx={{ display: 'flex', justifyContent: 'center' }}>{conn?.user?.name.toUpperCase()}</Typography>
+          <Typography variant="caption" color="secondary" sx={{ display: 'flex', justifyContent: 'center' }}>{conn?.user?.id}</Typography>
+        </Box>
         <Button
           variant="contained"
           size="large"

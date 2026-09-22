@@ -17,7 +17,7 @@ export interface ConnectionContexType {
   forceReconnect: () => void;
 
   chats: Record<string, Chat>;
-  editChat: (chat: Chat) => void;
+  editChat: (chat: Chat) => Promise<void>;
   sendMessage: (chat: Chat, message: Message) => Promise<Message>;
 }
 

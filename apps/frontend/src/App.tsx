@@ -11,6 +11,7 @@ import {
   Button,
   Backdrop,
   CircularProgress,
+  Alert,
 } from '@mui/material';
 import { argbFromHex, themeFromSourceColor, hexFromArgb } from '@material/material-color-utilities';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -28,6 +29,7 @@ import { cleanText } from 'dongo-shared';
 
 import { PushNotifications } from '@capacitor/push-notifications'
 import { getWebPushToken, listenToWebPush, } from './firebase';
+import { generateAndStoreKeyPair, getStoredPublicKeyPem, hashBase64, hasStoredKeyPair } from './types/keys';
 
 const WEB_VAPID_KEY = 'BFo31hROQCoKCBwctHn1K_aKaMgphD2Esyi6l3MAmLsW_8sWFwa37haFTknWhFSIX9Tpv4Nzf8a6--I-OX3zMgI'
 
@@ -36,10 +38,11 @@ export function App() {
   const [sourceColor, setSourceColor] = useState('#8f9fe7');
   const [conn, setConn] = useState<ConnectionSettings>();
   const [loadding, setLoadding] = useState(true)
+  const [attempt, setAttempt] = useState(0)
 
   const [ip, setIp] = useState<string>(conn?.ip ?? 'wss://dongo.magin.top');
   const [name, setName] = useState<string>(conn?.user?.name ?? '');
-  const [pass, setPass] = useState<string>(conn?.user?.pass ?? '');
+  const [error, setError] = useState<string>();
 
   useEffect(() => {
     // Las notificaciones push solo se configuran en Android/iOS.
@@ -254,28 +257,33 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
-    loadConnectionSettings().then(c => {
+    loadConnectionSettings().then(async c => {
       if (cancelled) return;
 
       const loadedIp = c?.ip ?? 'wss://dongo.magin.top';
       const loadedName = c?.user?.name ?? '';
-      const loadedPass = c?.user?.pass ?? '';
 
       setIp(loadedIp);
       setName(loadedName);
-      setPass(loadedPass);
 
       setLoadding(false)
 
-      if (loadedIp === '' || loadedName === '' || loadedPass === '')
+      if (loadedIp === '' || loadedName === '' || !(await hasStoredKeyPair()))
         return
 
+      const puk = await getStoredPublicKeyPem()
+
+      if (!puk)
+        return;
+
       setConn({
-        ip: loadedIp, user: {
-          id: cleanText(loadedName),
+        ip: loadedIp,
+        user: {
+          // TODO: Obtener 
+          id: await hashBase64(puk),
           name: loadedName,
-          pass: loadedPass
-        }
+        },
+        puk
       })
     });
 
@@ -308,13 +316,15 @@ export function App() {
 
       {(conn) && <DongoChat conn={conn} setConn={setConn} onChangeStatus={(status) => {
         console.log('status changed:', status)
-        switch (status) {
+        setAttempt(status.attempt ?? 0)
+        switch (status.type) {
           case 'idle': setLoadding(true); break;
           case 'connecting': setLoadding(true); break;
-          case 'disconnected': setLoadding(true); break;
-          case 'dead': setConn(undefined); setLoadding(false); break;
+          case 'disconnected': setConn(undefined); setLoadding(false); break;
           case 'inboxed': setLoadding(false); break;
         }
+
+        setError(status.error)
       }} />}
       {(!loadding && !conn) &&
         <Box sx={{
@@ -349,20 +359,6 @@ export function App() {
               }} />
             <TextField
               fullWidth
-              label="Password"
-              variant="outlined"
-              type="password"
-              hidden={true}
-              value={pass}
-              onChange={e => setPass(e.target.value)}
-
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                }
-              }} />
-            <TextField
-              fullWidth
               label="IP Address"
               variant="outlined"
               type={'url'}
@@ -374,39 +370,53 @@ export function App() {
                 }
               }} />
             <Box sx={{
-              display: 'flex',
-              justify: 'space-between',
-              alignItems: 'center',
-              gap: 1,
-              py: 2,
-              width: '100%',
+              width: '100%'
             }}>
-              <Button
-                variant="contained"
-                color="primary"
-                size="large"
-                sx={{ borderRadius: 1, width: '100%' }}
-                onClick={() => setConn({
-                  ip, user: {
-                    id: cleanText(name),
-                    name,
-                    pass
-                  }
-                })}
-              >
-                Check Server
-              </Button>
-              <Box
-                sx={{
-                  color: theme => theme.palette.primary.main,
-                  alignSelf: 'stretch', // Estira el contenedor al alto total del flexbox
-                  aspectRatio: '1 / 1', // Garantiza que el ancho sea igual al alto
-                  height: 40,       // Permite que la altura sea dictada por la fila flex
-                  p: 0,                 // Elimina el padding si prefieres el icono al límite
-                  borderRadius: 1,      // Opcional: para que combine con el borderRadius del Button
-                }}
-              >
-                <HelpIcon sx={{ width: '100%', height: '100%' }} />
+              {error && <Alert severity='error'>{error}</Alert>}
+              <Box sx={{
+                display: 'flex',
+                justify: 'space-between',
+                alignItems: 'center',
+                gap: 1,
+                py: 2,
+                width: '100%',
+              }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  sx={{ borderRadius: 1, width: '100%' }}
+                  onClick={async () => {
+                    const puk = (await hasStoredKeyPair())
+                      ? await getStoredPublicKeyPem()
+                      : (await generateAndStoreKeyPair()).publicKeyPem
+
+                    if (!puk) return
+
+                    setConn({
+                      ip,
+                      user: {
+                        id: await hashBase64(puk),
+                        name,
+                      },
+                      puk
+                    })
+                  }}
+                >
+                  Check Server
+                </Button>
+                <Box
+                  sx={{
+                    color: theme => theme.palette.primary.main,
+                    alignSelf: 'stretch', // Estira el contenedor al alto total del flexbox
+                    aspectRatio: '1 / 1', // Garantiza que el ancho sea igual al alto
+                    height: 40,       // Permite que la altura sea dictada por la fila flex
+                    p: 0,                 // Elimina el padding si prefieres el icono al límite
+                    borderRadius: 1,      // Opcional: para que combine con el borderRadius del Button
+                  }}
+                >
+                  <HelpIcon sx={{ width: '100%', height: '100%' }} />
+                </Box>
               </Box>
             </Box>
 
@@ -414,7 +424,20 @@ export function App() {
         </Box >
       }
 
-      <Backdrop open={loadding}><CircularProgress color='primary' /></Backdrop>
+      <Backdrop open={loadding} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <CircularProgress color='primary' />
+        {attempt > 0 &&
+          <>
+            <Typography variant='body1'>Connecting attempt {attempt}</Typography>
+            <Button variant='contained' onClick={() => {
+              setConn(undefined);
+              setLoadding(false);
+              setError('Connection canceled')
+            }}>Cancel</Button>
+          </>
+        }
+
+      </Backdrop>
     </ThemeProvider >
   );
 }

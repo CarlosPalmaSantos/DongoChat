@@ -1,5 +1,21 @@
 import short from "short-uuid";
 
+export function toUpperCamelCase(text: string) {
+  if (!text) return '';
+
+  return text
+    // Remueve acentos / diacríticos
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    // Reemplaza cualquier carácter no alfanumérico por espacios
+    .replace(/[^a-zA-Z0-9]/g, ' ')
+    // Divide en palabras, convierte la primera letra a mayúscula y el resto a minúscula
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+}
+
 export function cleanText(text: string) {
   return text
     .toLowerCase()
@@ -30,13 +46,21 @@ export namespace Id {
 
     return res + value
   }
-
 }
 
 export interface User {
   id: string;
   name: string;
-  pass: string;
+}
+
+export function ParseUser(data: any): User | undefined {
+  if ('id' in data && 'name' in data)
+    return {
+      id: data.id,
+      name: data.name,
+    }
+
+  return undefined
 }
 
 export interface PublicUser {

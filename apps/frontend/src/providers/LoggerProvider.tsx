@@ -47,7 +47,7 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
   }
 
   function log(...data: any[]) {
-    console.log(...data, `shlvl: ${showLevel}`)
+    console.log(...data)
 
     if (showLevel !== 'none' && showLevel !== 'error' && showLevel !== 'warn')
       anyLog(...data)

@@ -2,9 +2,11 @@ import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import type { User } from "dongo-shared";
 
 export interface ConnectionSettings {
-  ip?: string,
-  user?: User;
+  ip?: string
+  user?: User
+  puk?: string
 }
+
 
 export const saveConnectionSettings = async (conn: ConnectionSettings): Promise<void> => {
   console.log('Saving')

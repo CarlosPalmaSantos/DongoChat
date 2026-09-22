@@ -3,11 +3,16 @@ import { saveConnectionSettings, type ConnectionSettings } from "../types/User";
 import { io, Socket } from "socket.io-client";
 import { ConnectionContext } from "../contexts/ConnectionContext";
 import { getAllChats, saveChatMetadata, saveMessage, type Chat } from "../types/Chat";
-import { type Message, type User, cleanText } from "dongo-shared";
+import { type Message, type User, cleanText, toUpperCamelCase } from "dongo-shared";
 import { useLog } from "../hooks/useLog";
 import { Network } from "@capacitor/network";
-export type ConnStatus =
-  'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'dead' | 'inboxed'
+import { decryptWithStoredKey, bytesToBase64 } from "../types/keys";
+export type ConnStatus = {
+  type: 'disconnected' | 'idle' | 'connecting' | 'connected' | 'inboxed',
+  attempt?: number,
+  error?: string
+}
+
 export function ConnectionProvider({ children, selectedChat, conn, setConn, onChangeStatus }:
   {
     children: ReactNode,
@@ -23,7 +28,9 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
   // que aquí está puesto a Infinity, o justo antes del primer intento).
   const [status, setStatus] = useState<
     ConnStatus
-  >('idle');
+  >({
+    type: 'idle'
+  });
 
   const statusRef = useRef(status);
 
@@ -79,9 +86,9 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
     getAllChats().then(c => setChats(Object.fromEntries(c.map(c1 => ([c1.uuid, c1])))));
   }, [conn]);
 
-  const saveQueuesRef = useRef<Map<string, Promise<void>>>(new Map());
+  const saveQueuesRef = useRef<Map<string, Promise<string>>>(new Map());
 
-  const handleIncomingMessage = useCallback(async (msg: Message) => {
+  const handleIncomingMessage = useCallback(async (msg: Message & { senderInfo: User }) => {
     loggerRef.current.debug('incoming msg', msg);
 
     const chatUuid = msg.sender;
@@ -91,8 +98,8 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       const prevChat = chatsRef.current[chatUuid];
 
       const currentChat: Chat = prevChat ?? {
-        uuid: cleanText(chatUuid),
-        name: chatUuid,
+        uuid: msg.senderInfo.id,
+        name: toUpperCamelCase(msg.senderInfo.name),
         last: '',
         lastTimestamp: Date.now(),
         pending: 0,
@@ -125,7 +132,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
         [chatUuid]: updatedChat,
       }));
 
-      emitSafe('ack-message', msg.id);
+      return msg.id;
     });
 
     saveQueuesRef.current.set(chatUuid, currentQueue);
@@ -158,20 +165,12 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
     };
   }, [socket]);
 
-  // Manejo del ciclo de vida del Socket.
-  // IMPORTANTE: este efecto depende SOLO de los valores primitivos que
-  // identifican la conexión real (ip, user). NO depende de `socket` ni de
-  // `connected`, porque eso provocaba el bucle: cada disconnect/connect_error
-  // ponía socket en undefined, lo que volvía a disparar el efecto y creaba
-  // una instancia de socket nueva mientras la anterior seguía reintentando
-  // reconectar por su cuenta (comportamiento por defecto de socket.io-client).
-  //
-  // Ahora se crea UNA sola instancia por conexión y se deja que socket.io
-  // gestione sus propios reintentos (reconnection: true). El estado
-  // `connected` solo se usa para reflejar el estado en la UI.
   useEffect(() => {
-    if (!conn?.ip || !conn?.user || conn.ip === '' || conn.user.id === '' || conn.user.name === '' || conn.user.pass === '') {
-      setStatus('dead')
+    if (!conn?.ip || !conn?.user || !conn.puk || conn.ip === '' || conn.user.id === '' || conn.user.name === '') {
+      setStatus({
+        type: 'disconnected',
+        error: 'Invalid credentials'
+      })
       return;
     }
 
@@ -180,111 +179,93 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
 
     const activeSocket = io(conn.ip, {
       auth: conn.user,
-      // 5s se queda corto en el primer intento justo tras una caída de red
-      // (interfaz reasociándose, DHCP/DNS asentándose, socket TCP previo
-      // aún no liberado por el servidor...). Con más margen evitamos
-      // timeouts "falsos" cuando el servidor en realidad sí está disponible.
       reconnection: true,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: 5,
 
       reconnectionDelay: 250,
-      reconnectionDelayMax: 1500,
+      reconnectionDelayMax: 1000,
       randomizationFactor: 0,
 
-      // No esperar 20 segundos para declarar fallido un intento
       timeout: 5000,
-      // Evita el transporte de polling (XHR de larga duración), que con
-      // CapacitorHttp habilitado puede fallar y dar "xhr poll error" --
-      // ver App.tsx para la explicación completa. WebSocket no pasa por
-      // el shim de CapacitorHttp.
       transports: ['websocket'],
     });
 
-    // La instancia se registra una única vez al crearse; no se recrea
-    // en cada evento de conexión/desconexión.
     setSocket(activeSocket);
-    setStatus('connecting');
+    setStatus({
+      type: 'connecting',
+    });
 
-    // Evento 1: Conexión Exitosa (primera vez o tras una reconexión)
     activeSocket.on('connect', () => {
       loggerRef.current.log(`Socket conectado con éxito. ID: ${activeSocket.id}`);
-      setStatus('connected');
+      setStatus({ type: 'connected' });
+
+      activeSocket.once('req_puk', (ack: (response: unknown) => void) => {
+        loggerRef.current.log('PuK requested')
+        ack(conn.puk);
+      })
+
+      activeSocket.once('test_puk', async (encryptedValidation: string, ack: (response: unknown) => void) => {
+        loggerRef.current.log('Testing PuK ownership');
+        const plainBuffer = await decryptWithStoredKey(encryptedValidation);
+        const value = bytesToBase64(new Uint8Array(plainBuffer));
+        ack(value);
+      })
+
     });
 
-    // --- Eventos internos de reconexión de socket.io-client ---
-    // Se disparan automáticamente cuando, tras un 'disconnect', el propio
-    // socket intenta reconectar solo (gracias a reconnection: true).
-
-    // Se dispara justo antes de cada intento de reconexión.
     activeSocket.io.on('reconnect_attempt', (attempt: number) => {
       loggerRef.current.log(`Intento de reconexión nº ${attempt}...`);
-      setStatus('reconnecting');
+      setStatus({ type: 'connecting', attempt });
     });
 
-    // Se dispara cuando un intento de reconexión ha tenido éxito.
-    // (activeSocket.on('connect') también se dispara en este caso,
-    // así que esto es solo para loguear el número de intentos que costó).
     activeSocket.io.on('reconnect', (attempt: number) => {
       loggerRef.current.log(`Reconectado tras ${attempt} intento(s).`);
+      setStatus({ type: 'connected' });
     });
 
-    // Se dispara cuando un intento individual de reconexión falla.
     activeSocket.io.on('reconnect_error', (err: Error) => {
       loggerRef.current.warn(`Fallo en intento de reconexión: ${err.message}`);
     });
 
-    // Solo se dispara si reconnectionAttempts es finito y se agotan todos.
-    // Con Infinity nunca debería llegar a dispararse, pero se deja por
-    // seguridad ante un cambio futuro de configuración.
     activeSocket.io.on('reconnect_failed', () => {
       loggerRef.current.warn('Se agotaron los intentos de reconexión.');
-      setStatus('disconnected');
+      setStatus({ type: 'disconnected', error: 'Server connection failed' });
     });
 
-    // Evento 2: Procesamiento del inbox inicial
     const onConnectedInbox = async (d: Record<string, Message>) => {
       loggerRef.current.log('connected inbox', d);
       for (const msg of Object.values(d)) {
         await handleIncomingMessageRef.current(msg);
       }
       activeSocket.emit('ack-connected-inbox');
-      setStatus('inboxed')
+      setStatus({ type: 'inboxed' })
     };
 
     activeSocket.on('connected-inbox', onConnectedInbox);
 
-    // Evento 3: Error de Conexión o Autenticación
     activeSocket.on('connection-error', (err) => {
       loggerRef.current.warn(`Error de conexión socket: ${err.message}`);
-      setStatus('dead');
-      // No se destruye ni recrea el socket aquí: socket.io-client ya
-      // reintentará automáticamente según reconnection/reconnectionAttempts.
+      setStatus({ type: 'disconnected', error: 'Connection error' });
     });
 
-    // Evento 4: Desconexión
     activeSocket.on('disconnect', (reason) => {
       loggerRef.current.warn(`Socket desconectado: ${reason}`);
+      // TODO: Mejorar lógica de reconexión
 
-      if (statusRef.current === 'dead') return
+      if (statusRef.current.type === 'disconnected') return
 
       if (reason === 'io server disconnect') {
-        // El servidor cerró la conexión explícitamente: socket.io-client
-        // NO reintenta solo en este caso, así que forzamos el intento
-        // manualmente. connect() dispara internamente el ciclo normal
-        // de reconexión (reconnect_attempt, etc. no aplican aquí porque
-        // es un intento manual, así que lo marcamos a mano).
-        setStatus('reconnecting');
+        setStatus({
+          type: 'connecting'
+        });
         activeSocket.connect();
       } else {
-        // Resto de casos (red caída, transporte cerrado, ping timeout...):
-        // socket.io-client reintenta solo y disparará 'reconnect_attempt'.
-        setStatus('reconnecting');
+        setStatus({
+          type: 'connecting'
+        });
       }
     });
 
-    // Se dispara cuando Capacitor detecta (vía APIs nativas, no el WebView)
-    // que ha vuelto la conectividad de red. Es más fiable que el evento
-    // 'online' del navegador, que en iOS/WKWebView no siempre dispara.
     const networkListenerPromise = Network.addListener('networkStatusChange', (status) => {
       if (!status.connected) return;
       if (activeSocket.connected) return;
@@ -304,10 +285,9 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       networkListenerPromise.then(listener => listener.remove());
       activeSocket.disconnect();
       setSocket(undefined);
-      setStatus('idle');
+      setStatus({ type: 'idle' });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conn?.ip, conn?.user?.name, conn?.user?.pass]);
+  }, [conn?.ip, conn?.user?.name]);
 
   function emit(event: string, data: unknown) {
     return new Promise((resolve) => {
@@ -337,12 +317,10 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
     }));
   }
 
-  function editChat(chat: Chat) {
-    setChats(prev => {
-      saveChatMetadata(chat);
-      return { ...prev, [chat.uuid]: chat };
-    });
-  }
+  const editChat = useCallback(async (chat: Chat) => {
+    setChats(prev => ({ ...prev, [chat.uuid]: chat }));
+    await saveChatMetadata(chat); // si falla, se propaga y no actualizamos el estado
+  }, []);
 
   const sendMessage = useCallback(async (chat: Chat, message: Message): Promise<Message> => {
     if (!socketRef.current) {
@@ -359,8 +337,6 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
     return msg;
   }, []);
 
-  // Permite forzar un intento de reconexión manual (p.ej. botón "Reconectar"
-  // en la UI) sin destruir ni recrear la instancia del socket.
   const forceReconnect = useCallback(() => {
     if (!socketRef.current) {
       loggerRef.current.warn('No hay socket para reconectar');
