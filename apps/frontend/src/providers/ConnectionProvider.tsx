@@ -233,14 +233,14 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       setStatus({ type: 'disconnected', error: 'Server connection failed' });
     });
 
-    const onConnectedInbox = async (d: Record<string, Message & { senderInfo: User }>) => {
+    const onConnectedInbox = async (d: Record<string, Message & { senderInfo: User }>, ack: (res: string) => void) => {
       loggerRef.current.log('connected inbox', d);
       for (const msg of Object.values(d)) {
         await handleIncomingMessageRef.current(msg);
       }
       setStatus({ type: 'inboxed' })
 
-      return 'ok'
+      ack('ok')
     };
 
     activeSocket.on('connected-inbox', onConnectedInbox);

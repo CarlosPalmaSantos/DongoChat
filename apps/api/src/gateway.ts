@@ -130,6 +130,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
       client
         .emitWithAck('connected-inbox', user.inbox)
         .then((_) => {
+          Logger.warn(`Removing Inbox: ${user.user.id}`);
           user.inbox = {};
         })
         .catch(() => { });

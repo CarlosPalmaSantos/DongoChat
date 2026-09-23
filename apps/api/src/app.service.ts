@@ -26,7 +26,6 @@ export class AppService {
   }
 
   searchUser(id: string, includeTermporal: boolean = true) {
-    Logger.debug(`SEARCH USER '${id}'`);
     const res = this.registeredUsers[id];
 
     if (res || (res === 'temp' && includeTermporal)) return res;
