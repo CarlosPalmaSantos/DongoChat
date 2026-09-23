@@ -9,13 +9,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Socket, Server } from 'socket.io';
-import {
-  type Message,
-  type User,
-  Id,
-  ParseUser,
-  cleanText,
-} from 'dongo-shared';
+import { type Message, type User, Id, ParseUser } from 'dongo-shared';
 import { AppService, UserEntry } from './app.service';
 import crypto, { createHash } from 'crypto';
 
@@ -78,7 +72,6 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
     Logger.log(`Login ${user.user.id}`);
 
     const validation = crypto.randomBytes(64);
-    Logger.debug(`Validation: ${validation.toString('base64')}`);
     Logger.debug(user);
 
     const encryptedValidation = crypto
@@ -102,21 +95,18 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
         'Invalid response to the PuK test',
         'INVALID_VALUE',
       );
-
-    Logger.debug(`Validation Response: ${res}`);
   }
 
   async handleConnection(client: Socket) {
     try {
       const auth = ParseUser(client.handshake.auth);
-      Logger.log(`Connecting ${JSON.stringify(client.handshake.auth)}`);
+      Logger.log(`Connecting ${auth?.name}`);
 
       if (!auth || auth.id === '' || auth.name === '') {
         throw new ConnectionError('Invalid credentials', 'INVALID_VALUE');
       }
 
       let user = this.appService.searchUser(auth.id);
-      Logger.log(user);
 
       if (!user) {
         user = await this.registerUser(client, auth);
@@ -135,6 +125,7 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
       await client.join(`inbox-${auth.id}`);
 
       Logger.debug(`SENDING INBOX [${Object.keys(user.inbox).length}]`);
+      Logger.debug(user.inbox);
 
       client
         .emitWithAck('connected-inbox', user.inbox)
@@ -142,17 +133,15 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
           user.inbox = {};
         })
         .catch(() => { });
-
-      user.inbox = {};
     } catch (e: unknown) {
       if (e instanceof ConnectionError) {
         Logger.error(e);
-        client.emit('ronnection-error', {
+        client.emit('connection-error', {
           message: e.message,
           code: e.code,
         });
       } else if (e instanceof Error) {
-        client.emit('ronnection-error', {
+        client.emit('connection-error', {
           message: e.message,
           code: 'UNOWN_ERROR',
         });
@@ -183,6 +172,24 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     Logger.log('GetUser');
     return this.appService.searchUser(id, false);
+  }
+
+  @SubscribeMessage('message-received')
+  handleMessageReceived(
+    @MessageBody() id: string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const auth = ParseUser(client.handshake.auth);
+    //
+    // TODO: Investigar si lanzar excepción
+    if (!auth) return;
+
+    const user = this.appService.searchUser(auth.id);
+
+    if (!user || user === 'temp') return;
+
+    Logger.log('Removing message');
+    delete user.inbox[id];
   }
 
   @SubscribeMessage('send-message')
@@ -218,24 +225,18 @@ export class Gateway implements OnGatewayConnection, OnGatewayDisconnect {
       };
 
       receiver.inbox[msg.id] = msg;
-      this.server
-        .to(`inbox-${receiver.user.id}`)
-        .emitWithAck('inbox-message', msg)
-        .then((_) => {
-          delete receiver.inbox[msg.id];
-        })
-        .catch(() => { });
+      this.server.to(`inbox-${receiver.user.id}`).emit('inbox-message', msg);
 
       return msg;
     } catch (e: unknown) {
       Logger.error(e);
       if (e instanceof ConnectionError) {
-        client.emit('ronnection-error', {
+        client.emit('connection-error', {
           message: e.message,
           code: e.code,
         });
       } else if (e instanceof Error) {
-        client.emit('ronnection-error', {
+        client.emit('connection-error', {
           message: e.message,
           code: 'UNOWN_ERROR',
         });

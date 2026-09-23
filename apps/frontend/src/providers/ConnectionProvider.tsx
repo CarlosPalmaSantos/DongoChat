@@ -132,6 +132,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
         [chatUuid]: updatedChat,
       }));
 
+      socketRef.current?.emit('message-received', msg.id)
       return msg.id;
     });
 
@@ -237,8 +238,9 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       for (const msg of Object.values(d)) {
         await handleIncomingMessageRef.current(msg);
       }
-      activeSocket.emit('ack-connected-inbox');
       setStatus({ type: 'inboxed' })
+
+      return 'ok'
     };
 
     activeSocket.on('connected-inbox', onConnectedInbox);
