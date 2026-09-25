@@ -8,7 +8,7 @@ import { useLog } from "../hooks/useLog";
 import { Network } from "@capacitor/network";
 import { decryptWithStoredKey, bytesToBase64 } from "../types/keys";
 export type ConnStatus = {
-  type: 'disconnected' | 'idle' | 'connecting' | 'connected' | 'inboxed',
+  type: 'unlogged' | 'disconnected' | 'idle' | 'connecting' | 'connected' | 'inboxed',
   attempt?: number,
   error?: string
 }
@@ -163,13 +163,14 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
 
     return () => {
       currentSocket.off('inbox-message', listener);
+
     };
   }, [socket]);
 
-  useEffect(() => {
+  const connect = useCallback(() => {
     if (!conn?.ip || !conn?.user || !conn.puk || conn.ip === '' || conn.user.id === '' || conn.user.name === '') {
       setStatus({
-        type: 'disconnected',
+        type: 'unlogged',
         error: 'Invalid credentials'
       })
       return;
@@ -184,7 +185,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       reconnectionAttempts: 5,
 
       reconnectionDelay: 250,
-      reconnectionDelayMax: 1000,
+      reconnectionDelayMax: 500,
       randomizationFactor: 0,
 
       timeout: 5000,
@@ -289,7 +290,20 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       setSocket(undefined);
       setStatus({ type: 'idle' });
     };
-  }, [conn?.ip, conn?.user?.name]);
+
+  }, [conn])
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
+    queueMicrotask(() => {
+      cleanup = connect();
+    });
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [conn?.ip, conn?.user?.name, connect]);
 
   function emit(event: string, data: unknown) {
     return new Promise((resolve) => {
@@ -352,6 +366,7 @@ export function ConnectionProvider({ children, selectedChat, conn, setConn, onCh
       value={{
         ping,
         conn,
+        connect,
         editConn,
         socket,
         status,

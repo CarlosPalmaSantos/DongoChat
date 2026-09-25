@@ -9,6 +9,7 @@ export interface ConnectionContexType {
   ping: () => Promise<number>;
 
   conn?: ConnectionSettings;
+  connect: () => (() => void) | undefined;
   editConn: (val: Partial<ConnectionSettings>) => void;
   editUser: (val: User) => void;
 

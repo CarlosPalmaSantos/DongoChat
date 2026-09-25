@@ -9,11 +9,10 @@ import {
   TextField,
   Typography,
   Button,
-  Backdrop,
-  CircularProgress,
   Alert,
+  switchClasses,
 } from '@mui/material';
-import { argbFromHex, themeFromSourceColor, hexFromArgb } from '@material/material-color-utilities';
+import { argbFromHex, themeFromSourceColor, hexFromArgb, customColor } from '@material/material-color-utilities';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
@@ -198,15 +197,36 @@ export function App() {
     getColor();
   }, []);
 
+  const WARNING_SEED = '#FFB300';
+
   const theme = useMemo(() => {
-    const m3Theme = themeFromSourceColor(argbFromHex(sourceColor));
+    const sourceArgb = argbFromHex(sourceColor);
+    const m3Theme = themeFromSourceColor(sourceArgb);
     const scheme = prefersDarkMode ? m3Theme.schemes.dark : m3Theme.schemes.light;
+
+    // Genera el custom color role "warning" armonizado con tu color semilla
+    const warningGroup = customColor(sourceArgb, {
+      value: argbFromHex(WARNING_SEED),
+      name: 'warning',
+      blend: true, // lo "acerca" al hue del source color para que combine
+    });
+
+    const warningScheme = prefersDarkMode ? warningGroup.dark : warningGroup.light;
 
     return createTheme({
       palette: {
         mode: prefersDarkMode ? 'dark' : 'light',
+        warning: {
+          main: hexFromArgb(warningScheme.color),
+          contrastText: hexFromArgb(warningScheme.onColor),
+          container: hexFromArgb(warningScheme.colorContainer),
+          onContainer: hexFromArgb(warningScheme.onColorContainer),
+        },
         error: {
-          main: hexFromArgb(scheme.error)
+          main: hexFromArgb(scheme.error),
+          contrastText: hexFromArgb(scheme.onError),
+          container: hexFromArgb(scheme.errorContainer),
+          onContainer: hexFromArgb(scheme.onErrorContainer),
         },
         primary: {
           main: hexFromArgb(scheme.primary),
@@ -223,6 +243,8 @@ export function App() {
         tertiary: {
           main: hexFromArgb(scheme.tertiary),
           contrastText: hexFromArgb(scheme.onTertiary),
+          container: hexFromArgb(scheme.tertiaryContainer),
+          onContainer: hexFromArgb(scheme.onTertiaryContainer),
         },
         background: {
           default: hexFromArgb(scheme.background),
@@ -231,7 +253,7 @@ export function App() {
         },
         text: {
           surfaceVariant: hexFromArgb(scheme.onSurfaceVariant),
-        }
+        },
       },
       shape: { borderRadius: 16 },
       typography: { fontFamily: 'Roboto, sans-serif' },
@@ -316,16 +338,13 @@ export function App() {
       {(conn) && <DongoChat conn={conn} setConn={setConn} onChangeStatus={(status) => {
         console.log('status changed:', status)
         setAttempt(status.attempt ?? 0)
-        switch (status.type) {
-          case 'idle': setLoadding(true); break;
-          case 'connecting': setLoadding(true); break;
-          case 'disconnected': setConn(undefined); setLoadding(false); break;
-          case 'inboxed': setLoadding(false); break;
-        }
+
+        if (status.type === 'unlogged')
+          setConn(undefined);
 
         setError(status.error)
       }} />}
-      {(!loadding && !conn) &&
+      {!conn &&
         <Box sx={{
           display: 'flex',
           flexDirection: 'column',
@@ -418,25 +437,9 @@ export function App() {
                 </Box>
               </Box>
             </Box>
-
           </Card>
         </Box >
       }
-
-      <Backdrop open={loadding} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <CircularProgress color='primary' />
-        {attempt > 0 &&
-          <>
-            <Typography variant='body1'>Connecting attempt {attempt}</Typography>
-            <Button variant='contained' onClick={() => {
-              setConn(undefined);
-              setLoadding(false);
-              setError('Connection canceled')
-            }}>Cancel</Button>
-          </>
-        }
-
-      </Backdrop>
     </ThemeProvider >
   );
 }

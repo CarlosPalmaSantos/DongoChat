@@ -1,4 +1,4 @@
-import { AppBar, Avatar, Badge, Box, Button, Card, CardActionArea, Container, Dialog, Fab, IconButton, Paper, Stack, TextField, Toolbar, Typography } from "@mui/material";
+import { AppBar, Avatar, Badge, Box, Button, Card, CardActionArea, CircularProgress, Container, Dialog, Fab, IconButton, Paper, Stack, TextField, Toolbar, Typography } from "@mui/material";
 import SettingsIcon from '@mui/icons-material/Settings';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
@@ -73,7 +73,7 @@ interface ChatPageProps {
 export default function ChatsPage({ onChatSelected }: ChatPageProps) {
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [newUser, setNewUser] = useState<string>();
-  const { editChat, chats, socket } = useConnection();
+  const { editChat, chats, socket, status, connect } = useConnection();
   const [userList, setUserList] = useState<User[]>([])
 
   return (
@@ -104,74 +104,115 @@ export default function ChatsPage({ onChatSelected }: ChatPageProps) {
       <Box
         sx={{ position: 'fixed', bottom: 24, right: 24, gap: 1, display: 'flex', flexDirection: 'column' }}
       >
-        <Dialog open={dialogOpen}>
-          <Card sx={{ display: 'flex', flexDirection: 'column', p: 4, gap: 3, alignItems: 'center' }}>
-            <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1 }}>
-              <TextField
-                value={newUser}
-                label="Usuario"
-                variant="outlined"
-                onChange={v => setNewUser(v.target.value)}
-                slotProps={{
-                  input: {
-                    endAdornment: <IconButton color="primary"
-                      onClick={async () => {
-                        console.log('listing')
-                        if ((newUser ?? '').length < 3) return
-                        const list = await socket?.emitWithAck('list-user', newUser)
-                        setUserList(list)
-                      }}>
-                      <SearchIcon />
-                    </IconButton>,
-                  },
-                }}
-              />
-            </Box>
-            {(userList && userList.length > 0) && userList.map(u =>
-              <Paper color="primary" key={u.id} variant="outlined" sx={{ px: 2, py: 1, width: '100%', display: 'flex', alignItems: 'center' }}>
-                <Box sx={{ display: 'flex', flexGrow: 1, gap: 1 }}>
-                  <Typography variant="body1" color="secondary">
-                    ( {u.id.substring(0, 4)} )
-                  </Typography>
-                  <Typography variant="body1" >
-                    {u.name}
-                  </Typography>
-                </Box>
-                <Box>
-                  <IconButton
-                    sx={{
-                      color: theme => theme.palette.primary.main,
-                      alignSelf: 'stretch', // Estira el contenedor al alto total del flexbox
-                      aspectRatio: '1 / 1', // Garantiza que el ancho sea igual al alto
-                      p: 1,                 // Elimina el padding si prefieres el icono al límite
-                    }}
+        {/* Botón flotante para crear chat */}
+        <Box
+          sx={{ position: 'fixed', bottom: 24, right: 24, gap: 1, display: 'flex', flexDirection: 'column' }}
+        >
+          <Dialog open={dialogOpen}>
+            {/* ...contenido del dialog sin cambios... */}
+          </Dialog>
+          <Fab
+            color="primary"
+            onClick={() => { setDialogOpen(true); }}
+          >
+            <AddIcon />
+          </Fab>
+          <Fab
+            color="primary"
+            onClick={() => { onChatSelected('settings'); }}
+          >
+            <SettingsIcon />
+          </Fab>
+        </Box>
 
+        {/* Fab nuevo, abajo a la izquierda */}
+        {(status.type !== 'connected' && status.type !== 'inboxed') && <Box
+          sx={{ position: 'fixed', bottom: 24, left: 24 }}
+        >
+          <Fab
+            variant={status.error ? 'extended' : 'circular'}
+            color={status.error ? 'error' : (
+              status.attempt && status.attempt > 2 ? 'warning' :
+                'primary')}
+
+            sx={{
+              pointerEvents: status.error ? 'auto' : 'none',
+              cursor: status.error ? 'pointer' : 'none'
+            }}
+            onClick={connect}
+          >
+            {status.error ? <Typography>{status.error}</Typography> : <CircularProgress color="inherit" sx={{ p: .75 }} />}
+          </Fab>
+        </Box>}
+      </Box >
+      <Dialog open={dialogOpen}>
+        <Card sx={{ display: 'flex', flexDirection: 'column', p: 4, gap: 3, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1 }}>
+            <TextField
+              value={newUser}
+              label="Usuario"
+              variant="outlined"
+              onChange={v => setNewUser(v.target.value)}
+              slotProps={{
+                input: {
+                  endAdornment: <IconButton color="primary"
                     onClick={async () => {
-                      await editChat({
-                        uuid: u.id,
-                        name: u.name,
-                        last: '',
-                        lastTimestamp: 0,
-                        bunchMaxSize: 20,
-                        lastBunch: 0,
-                      })
+                      console.log('listing')
+                      if ((newUser ?? '').length < 3) return
+                      const list = await socket?.emitWithAck('list-user', newUser)
+                      setUserList(list)
+                    }}>
+                    <SearchIcon />
+                  </IconButton>,
+                },
+              }}
+            />
+          </Box>
+          {(userList && userList.length > 0) && userList.map(u =>
+            <Paper color="primary" key={u.id} variant="outlined" sx={{ px: 2, py: 1, width: '100%', display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', flexGrow: 1, gap: 1 }}>
+                <Typography variant="body1" color="secondary">
+                  ( {u.id.substring(0, 4)} )
+                </Typography>
+                <Typography variant="body1" >
+                  {u.name}
+                </Typography>
+              </Box>
+              <Box>
+                <IconButton
+                  sx={{
+                    color: theme => theme.palette.primary.main,
+                    alignSelf: 'stretch', // Estira el contenedor al alto total del flexbox
+                    aspectRatio: '1 / 1', // Garantiza que el ancho sea igual al alto
+                    p: 1,                 // Elimina el padding si prefieres el icono al límite
+                  }}
 
-                      setDialogOpen(false);
-                    }}
-                  >
-                    <AddIcon />
-                  </IconButton>
-                </Box>
-              </Paper>
-            )}
-            <Button sx={{ p: 1 }} onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
+                  onClick={async () => {
+                    await editChat({
+                      uuid: u.id,
+                      name: u.name,
+                      last: '',
+                      lastTimestamp: 0,
+                      bunchMaxSize: 20,
+                      lastBunch: 0,
+                    })
 
-            {/* TODO: Agregar listado de usuarios con nombre
+                    setDialogOpen(false);
+                  }}
+                >
+                  <AddIcon />
+                </IconButton>
+              </Box>
+            </Paper>
+          )}
+          <Button sx={{ p: 1 }} onClick={() => setDialogOpen(false)}>
+            Cancel
+          </Button>
+
+          {/* TODO: Agregar listado de usuarios con nombre
               */}
 
-            {/*<Button sx={{ bgcolor: theme => theme.palette.primary.main, color: theme => theme.palette.primary.contrastText, width: 'fit-content' }}
+          {/*<Button sx={{ bgcolor: theme => theme.palette.primary.main, color: theme => theme.palette.primary.contrastText, width: 'fit-content' }}
               onClick={() => {
                 if (!newUser || newUser in chats) return;
                 editChat({
@@ -188,21 +229,9 @@ export default function ChatsPage({ onChatSelected }: ChatPageProps) {
             >
               ADD
             </Button>*/}
-          </Card>
-        </Dialog>
-        <Fab
-          color="primary"
-          onClick={() => { setDialogOpen(true); }}
-        >
-          <AddIcon />
-        </Fab>
-        <Fab
-          color="primary"
-          onClick={() => { onChatSelected('settings'); }}
-        >
-          <SettingsIcon />
-        </Fab>
-      </Box >
+        </Card>
+      </Dialog>
+
     </>
   );
 }

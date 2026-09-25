@@ -78,27 +78,11 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
 
         }}
       >
-        <Typography
-          variant="h5"
-          color="primary"
-          align="center"
-          sx={{ fontWeight: 'bold' }}
-        >
-          Connection
-        </Typography>
         <Box>
           <Typography variant="body1" color="primary" sx={{ display: 'flex', justifyContent: 'center' }}>{conn?.user?.name.toUpperCase()}</Typography>
           <Typography variant="caption" color="secondary" sx={{ display: 'flex', justifyContent: 'center' }}>{conn?.user?.id}</Typography>
         </Box>
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<DeleteIcon />}
-          onClick={() => deleteAllChats()}
-          sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText, flexGrow: 1 }}
-        >
-          CHATS
-        </Button>
+
         <Button
           variant="contained"
           size="large"
@@ -107,7 +91,16 @@ export default function SettingsPage({ clearSelectedChat }: { clearSelectedChat:
           }
           sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText, flexGrow: 1 }}
         >
-          USER
+          CONNECTION
+        </Button>
+        <Button
+          variant="contained"
+          size="large"
+          startIcon={<DeleteIcon />}
+          onClick={() => deleteAllChats()}
+          sx={{ borderRadius: 1, bgcolor: theme => theme.palette.tertiary.main, color: theme => theme.palette.tertiary.contrastText, flexGrow: 1 }}
+        >
+          CHATS
         </Button>
         <Snackbar
           open={!!error}
