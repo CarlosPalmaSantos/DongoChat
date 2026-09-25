@@ -10,7 +10,6 @@ import {
   Typography,
   Button,
   Alert,
-  switchClasses,
 } from '@mui/material';
 import { argbFromHex, themeFromSourceColor, hexFromArgb, customColor } from '@material/material-color-utilities';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -35,8 +34,8 @@ export function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
   const [sourceColor, setSourceColor] = useState('#8f9fe7');
   const [conn, setConn] = useState<ConnectionSettings>();
-  const [loadding, setLoadding] = useState(true)
-  const [attempt, setAttempt] = useState(0)
+  const [, setLoadding] = useState(true)
+  const [, setAttempt] = useState(0)
 
   const [ip, setIp] = useState<string>(conn?.ip ?? 'wss://dongo.magin.top');
   const [name, setName] = useState<string>(conn?.user?.name ?? '');
