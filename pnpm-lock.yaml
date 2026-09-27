@@ -335,6 +335,9 @@ importers:
 
   apps/frontend:
     dependencies:
+      '@capacitor-community/safe-area':
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.5.2)
       '@capacitor/android':
         specifier: ^8.5.1
         version: 8.5.2(@capacitor/core@8.5.2)
@@ -356,9 +359,6 @@ importers:
       '@capacitor/push-notifications':
         specifier: ^8.1.2
         version: 8.1.2(@capacitor/core@8.5.2)
-      '@capacitor/status-bar':
-        specifier: ^8.0.3
-        version: 8.0.3(@capacitor/core@8.5.2)
       '@capgo/capacitor-updater':
         specifier: ^8.51.16
         version: 8.51.16(@capacitor/core@8.5.2)
@@ -696,6 +696,11 @@ packages:
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
 
+  '@capacitor-community/safe-area@8.0.1':
+    resolution: {integrity: sha512-zVVQ7k94DbOff1mHP8qrZGTJZWyhGZnKHD2eXdcobIoOBFW9CeVphLNZYDCop/DBsHXfv6r8k0/Ac8xMIlwT+A==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/android@8.5.2':
     resolution: {integrity: sha512-rtiaz78egCcS+vs29wkWCL3C+RhazKMSygXcjutwWP8NmO6r5UBxOvGf3Wjz5+ahobyQ723tn9gCePwRwcNDZQ==}
     peerDependencies:
@@ -741,11 +746,6 @@ packages:
 
   '@capacitor/push-notifications@8.1.2':
     resolution: {integrity: sha512-TQl4XxqJfNF+KbSYBFMXYYT5WXUaleVKXlByhh/8+KySMVNjp+l5OqAUoGe/sY1IAnGXEuUeCjA/WLZEVvGwrA==}
-    peerDependencies:
-      '@capacitor/core': '>=8.0.0'
-
-  '@capacitor/status-bar@8.0.3':
-    resolution: {integrity: sha512-csSpfNeN49Hx9JaQBSJEIiEbOLtXg3kcc2IpScq2fu5L520h3AWEvsxoH8Srk1jxfRKepaJ4S4sqSC3foI4AgA==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
@@ -5570,6 +5570,10 @@ snapshots:
       hashery: 1.5.1
       keyv: 5.6.0
 
+  '@capacitor-community/safe-area@8.0.1(@capacitor/core@8.5.2)':
+    dependencies:
+      '@capacitor/core': 8.5.2
+
   '@capacitor/android@8.5.2(@capacitor/core@8.5.2)':
     dependencies:
       '@capacitor/core': 8.5.2
@@ -5662,10 +5666,6 @@ snapshots:
       '@capacitor/core': 8.5.2
 
   '@capacitor/push-notifications@8.1.2(@capacitor/core@8.5.2)':
-    dependencies:
-      '@capacitor/core': 8.5.2
-
-  '@capacitor/status-bar@8.0.3(@capacitor/core@8.5.2)':
     dependencies:
       '@capacitor/core': 8.5.2
 

@@ -100,51 +100,54 @@ export default function ChatsPage({ onChatSelected }: ChatPageProps) {
       {/* Lista con scroll */}
       <Chats chats={Object.values(chats)} onChatSelected={onChatSelected} />
 
-      {/* Botón flotante para crear chat */}
       <Box
-        sx={{ position: 'fixed', bottom: 24, right: 24, gap: 1, display: 'flex', flexDirection: 'column' }}
+        sx={{
+          position: 'fixed',
+          bottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
+          right: "calc(24px + env(safe-area-inset-right, 0px))",
+          gap: 1,
+          display: 'flex',
+          flexDirection: 'column'
+        }}
       >
-        {/* Botón flotante para crear chat */}
-        <Box
-          sx={{ position: 'fixed', bottom: 24, right: 24, gap: 1, display: 'flex', flexDirection: 'column' }}
+        <Fab
+          color="primary"
+          onClick={() => { setDialogOpen(true); }}
         >
-          <Dialog open={dialogOpen}>
-            {/* ...contenido del dialog sin cambios... */}
-          </Dialog>
-          <Fab
-            color="primary"
-            onClick={() => { setDialogOpen(true); }}
-          >
-            <AddIcon />
-          </Fab>
-          <Fab
-            color="primary"
-            onClick={() => { onChatSelected('settings'); }}
-          >
-            <SettingsIcon />
-          </Fab>
-        </Box>
-
-        {/* Fab nuevo, abajo a la izquierda */}
-        {(status.type !== 'connected' && status.type !== 'inboxed') && <Box
-          sx={{ position: 'fixed', bottom: 24, left: 24 }}
+          <AddIcon />
+        </Fab>
+        <Fab
+          color="primary"
+          onClick={() => { onChatSelected('settings'); }}
         >
-          <Fab
-            variant={status.error ? 'extended' : 'circular'}
-            color={status.error ? 'error' : (
-              status.attempt && status.attempt > 2 ? 'warning' :
-                'primary')}
+          <SettingsIcon />
+        </Fab>
+      </Box>
 
-            sx={{
-              pointerEvents: status.error ? 'auto' : 'none',
-              cursor: status.error ? 'pointer' : 'none'
-            }}
-            onClick={connect}
-          >
-            {status.error ? <Typography>{status.error}</Typography> : <CircularProgress color="inherit" sx={{ p: .75 }} />}
-          </Fab>
-        </Box>}
-      </Box >
+      {/* Fab nuevo, abajo a la izquierda */}
+      {(status.type !== 'connected' && status.type !== 'inboxed') && <Box
+        sx={{
+          position: 'fixed',
+          bottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
+          left: "calc(24px + env(safe-area-inset-left, 0px))",
+        }}
+      >
+        <Fab
+          variant={status.error ? 'extended' : 'circular'}
+          color={status.error ? 'error' : (
+            status.attempt && status.attempt > 2 ? 'warning' :
+              'primary')}
+
+          sx={{
+            pointerEvents: status.error ? 'auto' : 'none',
+            cursor: status.error ? 'pointer' : 'none'
+          }}
+          onClick={connect}
+        >
+          {status.error ? <Typography>{status.error}</Typography> : <CircularProgress color="inherit" sx={{ p: .75 }} />}
+        </Fab>
+      </Box>}
+
       <Dialog open={dialogOpen}>
         <Card sx={{ display: 'flex', flexDirection: 'column', p: 4, gap: 3, alignItems: 'center' }}>
           <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1 }}>

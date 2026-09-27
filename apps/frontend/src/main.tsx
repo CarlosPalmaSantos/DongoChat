@@ -29,6 +29,7 @@ if (Capacitor.isNativePlatform()) {
 }
 
 async function checkForUpdate() {
+  return;
   const MANIFEST_URL =
     'https://github.com/CarlosPalmaSantos/DongoChat/releases/latest/download/manifest.json'
 

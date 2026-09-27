@@ -12,8 +12,9 @@ import {
   Alert,
 } from '@mui/material';
 import { argbFromHex, themeFromSourceColor, hexFromArgb, customColor } from '@material/material-color-utilities';
-import { Capacitor, registerPlugin } from '@capacitor/core';
-import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor, registerPlugin, SystemBarsStyle } from '@capacitor/core';
+
+import { SafeArea } from '@capacitor-community/safe-area';
 
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
@@ -316,10 +317,8 @@ export function App() {
 
     const setupStatusBar = async () => {
       try {
-        await StatusBar.setBackgroundColor({ color: '#00000000' });
-        await StatusBar.setOverlaysWebView({ overlay: true });
-        await StatusBar.setStyle({
-          style: prefersDarkMode ? Style.Dark : Style.Light,
+        await SafeArea.setSystemBarsStyle({
+          style: prefersDarkMode ? SystemBarsStyle.Dark : SystemBarsStyle.Light,
         });
       } catch (e) {
         console.error('Error configurando StatusBar:', e);
